@@ -1,0 +1,53 @@
+# LILY LOOK — заметки для Claude Code
+
+Интернет-магазин женской одежды. SvelteKit 2 / Svelte 5 (runes), Tailwind v4, shadcn-svelte, Prisma 7 + Neon Postgres.
+
+## Правила, которые легко нарушить
+
+**Язык.** Весь текст, который видит покупатель, — украинский. Комментарии в коде — тоже украинский. README и этот файл — русский.
+
+**Деньги — целые числа в копейках.** Никаких Float/Decimal. Форматирует только `src/lib/money.ts` (`formatPrice`). Если увидел `.toFixed(2)` или деление на 100 вне `money.ts` — это баг.
+
+**Слои.** `routes → lib/server → prisma`. Компоненты не импортируют `$lib/server` (SvelteKit это заблокирует). Общие типы — в `src/lib/types.ts`, не в серверных модулях.
+
+**Компоненты `src/lib/components/ui/**` — вендоренные.** Ставятся через `npx shadcn-svelte@latest add <name>`, вручную не редактируются (перезапишутся), из линта исключены.
+
+**Prisma 7 требует driver adapter.** `new PrismaClient()` без `adapter` не работает. Клиент генерируется в `prisma/generated/` (в git не коммитится) — после правки схемы обязательно `npm run db:generate`.
+
+**Формы работают без JS.** Все мутации — form actions, `use:enhance` только для тостов и снятия перезагрузки. Не заменяй их на `fetch`.
+
+## Команды
+
+```bash
+npm run dev            # дев-сервер
+npm run check          # svelte-check — гоняй после правок типов
+npm run lint           # prettier --check + eslint
+npm run format         # prettier --write
+npm run db:migrate     # новая миграция (dev)
+npm run db:seed        # перезалить демо-каталог (сначала чистит таблицы!)
+npm run db:studio      # GUI к базе
+```
+
+Проверка перед сдачей задачи: `npm run check && npm run lint`.
+
+## Где что лежит
+
+| Задача                        | Файл                         |
+| ----------------------------- | ---------------------------- |
+| Запросы каталога              | `src/lib/server/catalog.ts`  |
+| Корзина                       | `src/lib/server/cart.ts`     |
+| Оформление заказа             | `src/lib/server/orders.ts`   |
+| Подключение провайдера оплаты | `src/lib/server/payments.ts` |
+| Доставка, размеры, сортировки | `src/lib/config.ts`          |
+| Валидация форм                | `src/lib/schemas.ts`         |
+| Схема БД                      | `prisma/schema.prisma`       |
+| Демо-данные                   | `prisma/seed.ts`             |
+
+## Особенности реализации
+
+- Корзина серверная: в httpOnly-куке `lily_cart` только id. Цены всегда из БД.
+- В корзину/заказ попадает `ProductVariant` (размер+цвет), а не `Product`.
+- `OrderItem` хранит снимок товара — заказ не меняется задним числом.
+- Списание остатков: `updateMany` с условием `stock >= quantity` внутри `$transaction`.
+- Пока `DATABASE_URL` пустой, `hooks.server.ts` редиректит всё на `/setup`.
+- Правило `svelte/no-navigation-without-resolve` отключено намеренно — приложение живёт в корне домена.
