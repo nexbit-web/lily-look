@@ -148,28 +148,36 @@
 				<SizeChartDialog categorySlug={product.category.slug} {selectedSize} />
 			</div>
 
-			<div class="flex flex-wrap gap-2">
-				{#each sizes as size (size)}
-					{@const variant = variantFor(selectedColor, size)}
-					{@const available = (variant?.stock ?? 0) > 0}
-					<button
-						type="button"
-						disabled={!available}
-						onclick={() => (selectedSize = size)}
-						aria-pressed={selectedSize === size}
-						class={cn(
-							'h-11 min-w-14 cursor-pointer rounded-xl border px-3 text-sm transition-colors',
-							selectedSize === size
-								? 'border-foreground bg-foreground text-background'
-								: 'hover:border-foreground/40',
-							!available &&
-								'cursor-not-allowed border-dashed text-muted-foreground/60 line-through hover:border-border'
-						)}
-					>
-						{size}
-					</button>
-				{/each}
-			</div>
+			{#if sizes.length === 0}
+				<!-- Розміри без залишку сюди не доїжджають узагалі, тож порожній
+				     список означає рівно одне: модель розібрали. -->
+				<p class="text-sm text-muted-foreground">
+					Усі розміри розібрали. Модель повернеться в наявність — з'явиться й вибір.
+				</p>
+			{:else}
+				<div class="flex flex-wrap gap-2">
+					{#each sizes as size (size)}
+						{@const variant = variantFor(selectedColor, size)}
+						{@const available = (variant?.stock ?? 0) > 0}
+						<button
+							type="button"
+							disabled={!available}
+							onclick={() => (selectedSize = size)}
+							aria-pressed={selectedSize === size}
+							class={cn(
+								'h-11 min-w-14 cursor-pointer rounded-md  border px-3 text-sm transition-colors',
+								selectedSize === size
+									? 'border-foreground bg-foreground text-background'
+									: 'hover:border-foreground/40',
+								!available &&
+									'cursor-not-allowed border-dashed text-muted-foreground/60 line-through hover:border-border'
+							)}
+						>
+							{size}
+						</button>
+					{/each}
+				</div>
+			{/if}
 
 			<p class="min-h-5 text-xs text-brand">
 				{#if selected && selected.stock <= LOW_STOCK}
@@ -179,10 +187,16 @@
 		</fieldset>
 
 		<div class="space-y-3">
+			<!--
+				Заливка кнопки — фонова картинка з background-position: center.
+				На наведення її ширина йде в нуль, тож колір стискається з обох
+				боків до середини, лишаючи рамку й текст того ж кольору.
+				`enabled:` — щоб вимкнена кнопка не «роздягалась» під курсором.
+			-->
 			<Button
 				type="submit"
 				size="lg"
-				class="h-14 w-full text-sm rounded-none"
+				class="h-14 w-full rounded-md border-2 border-[#53af01] bg-transparent bg-[linear-gradient(#53af01,#53af01)] bg-[length:100%_100%] bg-center bg-no-repeat text-xl duration-500 hover:bg-transparent enabled:hover:bg-[length:0%_100%] enabled:hover:text-[#53af01]"
 				disabled={!selected || submitting || soldOut}
 			>
 				{#if submitting}

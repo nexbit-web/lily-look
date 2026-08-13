@@ -94,6 +94,15 @@ describe('форма купівлі', () => {
 		expect(buy()).toBeDisabled();
 	});
 
+	it('розпродана модель приходить без варіантів і пояснює це', () => {
+		// Саме так її віддає сервер: розміри без залишку відсіюються в запиті.
+		render(AddToCartForm, { product: { ...product, variants: [] } });
+
+		expect(screen.getByText(/Усі розміри розібрали/)).toBeInTheDocument();
+		expect(buy()).toHaveTextContent('Немає в наявності');
+		expect(buy()).toBeDisabled();
+	});
+
 	it('показує знижку від старої ціни', () => {
 		render(AddToCartForm, { product: { ...product, compareAt: 330_000 } });
 		expect(screen.getByText('−20%')).toBeInTheDocument();

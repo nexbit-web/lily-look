@@ -26,8 +26,10 @@ export const reveal: Action<HTMLElement, { delay?: number } | undefined> = (node
 				observer.disconnect();
 			}
 		},
-		// Запускаємо трохи раніше, ніж блок торкнеться краю екрана.
-		{ rootMargin: '0px 0px -12% 0px', threshold: 0.05 }
+		// Блок має встигнути зайти в кадр: нижній край екрана «піднятий»
+		// на 18%, і потрібно, щоб було видно хоча б восьму частину блоку.
+		// Інакше поява спрацьовує ще за краєм і читається як миготіння.
+		{ rootMargin: '0px 0px -18% 0px', threshold: 0.12 }
 	);
 
 	observer.observe(node);

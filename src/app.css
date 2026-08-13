@@ -197,6 +197,40 @@
 		opacity: 1;
 		transform: none;
 	}
+
+	/* Прокрутка без смуги — для блоків, де смуга ламає композицію.
+	   Сам скрол лишається: коліщатко, свайп і клавіатура працюють. */
+	.no-scrollbar {
+		scrollbar-width: none;
+	}
+	.no-scrollbar::-webkit-scrollbar {
+		display: none;
+	}
+
+	/* Смуга прокрутки з'являється тільки під курсором. Місце під неї
+	   зарезервоване завжди (thin / фіксована ширина), тому вміст блоку
+	   не смикається, коли смуга проявляється. */
+	.scrollbar-hover {
+		scrollbar-width: thin;
+		scrollbar-color: transparent transparent;
+		transition: scrollbar-color 0.2s ease;
+	}
+	.scrollbar-hover:hover,
+	.scrollbar-hover:focus-within {
+		scrollbar-color: color-mix(in oklab, var(--foreground) 22%, transparent) transparent;
+	}
+	.scrollbar-hover::-webkit-scrollbar {
+		width: 6px;
+	}
+	.scrollbar-hover::-webkit-scrollbar-thumb {
+		border-radius: 999px;
+		background: transparent;
+		transition: background 0.2s ease;
+	}
+	.scrollbar-hover:hover::-webkit-scrollbar-thumb,
+	.scrollbar-hover:focus-within::-webkit-scrollbar-thumb {
+		background: color-mix(in oklab, var(--foreground) 22%, transparent);
+	}
 }
 
 /* Хто вимкнув анімації в системі — бачить статичну сторінку одразу. */

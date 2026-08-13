@@ -22,12 +22,14 @@ const LINE_INCLUDE = {
 			size: true,
 			color: true,
 			stock: true,
-			price: true,
+			isActive: true,
+			// Ціни беремо ті, що порахувала база: знижка вже врахована.
+			finalPrice: true,
 			product: {
 				select: {
 					name: true,
 					slug: true,
-					price: true,
+					finalPrice: true,
 					isActive: true,
 					images: { select: { url: true }, orderBy: { position: 'asc' }, take: 1 }
 				}
@@ -76,9 +78,10 @@ async function loadCart(cookies: Cookies): Promise<CartView> {
 	if (!cart) return EMPTY_CART;
 
 	const lines: CartLine[] = cart.items
-		.filter((item) => item.variant.product.isActive)
+		// Товар або розмір могли вимкнути в CRM, поки кошик лежав.
+		.filter((item) => item.variant.product.isActive && item.variant.isActive)
 		.map((item) => {
-			const unitPrice = item.variant.price ?? item.variant.product.price;
+			const unitPrice = item.variant.finalPrice ?? item.variant.product.finalPrice;
 			// Залишок міг зменшитись, поки кошик лежав: не даємо замовити більше.
 			const quantity = Math.min(item.quantity, item.variant.stock);
 			return {
@@ -140,10 +143,10 @@ export async function addToCart(
 ): Promise<CartResult> {
 	const variant = await db.productVariant.findUnique({
 		where: { id: variantId },
-		select: { id: true, stock: true, product: { select: { isActive: true } } }
+		select: { id: true, stock: true, isActive: true, product: { select: { isActive: true } } }
 	});
 
-	if (!variant || !variant.product.isActive) {
+	if (!variant || !variant.isActive || !variant.product.isActive) {
 		return { ok: false, message: 'Такого товару вже немає в каталозі.' };
 	}
 	if (variant.stock < 1) {

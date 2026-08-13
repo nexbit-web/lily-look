@@ -1,5 +1,5 @@
 import { SORT_OPTIONS, type SortOption } from '$lib/config';
-import { getCategory, listFacets, listProducts } from '$lib/server/catalog';
+import { getCategory, listCategoryCards, listFacets, listProducts } from '$lib/server/catalog';
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 
@@ -24,12 +24,19 @@ export const load: PageServerLoad = async ({ params, url }) => {
 	const sort = parseSort(url.searchParams.get('sort'));
 	const page = Number(url.searchParams.get('page')) || 1;
 
+	// Гола /catalog — це вітрина категорій, а не звалище всіх товарів.
+	// Пошук, розпродаж і фільтри лишаються звичайним списком.
+	if (!categorySlug && !query && !sale && sizes.length === 0 && colors.length === 0) {
+		return { view: 'categories' as const, categories: await listCategoryCards() };
+	}
+
 	const [result, facets] = await Promise.all([
 		listProducts({ categorySlug, sizes, colors, query, sale, sort, page }),
 		listFacets(categorySlug)
 	]);
 
 	return {
+		view: 'products' as const,
 		category,
 		facets,
 		filters: { sizes, colors, query, sale, sort },

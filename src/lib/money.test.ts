@@ -22,6 +22,12 @@ describe('formatPrice', () => {
 	it('не втрачає точності на великих сумах', () => {
 		expect(digits(formatPrice(99_999_900))).toMatch(/^999999/);
 	});
+
+	it('валюта дописана вручну — Node і браузер мають друкувати однаково', () => {
+		// style: 'currency' дає «₴» в Node і «грн» у Chrome, і ціна стрибала б
+		// після гідратації. Формат тут зафіксований навмисно.
+		expect(formatPrice(129900)).toMatch(/грн$/);
+	});
 });
 
 describe('discountPercent', () => {

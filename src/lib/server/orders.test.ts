@@ -83,7 +83,7 @@ describe('createOrder', () => {
 		await createOrder(cookies, input);
 
 		expect(tx.productVariant.updateMany).toHaveBeenCalledWith({
-			where: { id: 'var-1', stock: { gte: 2 } },
+			where: { id: 'var-1', isActive: true, stock: { gte: 2 } },
 			data: { stock: { decrement: 2 } }
 		});
 	});

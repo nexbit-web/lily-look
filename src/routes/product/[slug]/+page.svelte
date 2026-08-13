@@ -2,6 +2,7 @@
 	import { page } from '$app/state';
 	import { reveal } from '$lib/actions/reveal';
 	import AddToCartForm from '$lib/components/product/add-to-cart-form.svelte';
+	import ProductDescription from '$lib/components/product/product-description.svelte';
 	import ProductGallery from '$lib/components/product/product-gallery.svelte';
 	import ProductGrid from '$lib/components/product/product-grid.svelte';
 	import { SITE } from '$lib/config';
@@ -44,25 +45,22 @@
 		<span class="text-foreground">{product.name}</span>
 	</nav>
 
-	<!-- Галерея має фіксовану ширину (466px + мініатюри), решта — під форму -->
+	<!-- Галерея фіксованої ширини (466px + мініатюри), решта колонки — під форму -->
 	<div class="grid gap-10 lg:grid-cols-[auto_1fr] lg:gap-14">
 		<!-- key: при переході на інший товар вибір кольору/розміру має скинутись -->
 		{#key product.id}
 			<ProductGallery images={product.images} name={product.name} />
-			<AddToCartForm {product} />
+
+			<div class="space-y-8">
+				<AddToCartForm {product} />
+				<ProductDescription text={product.description} />
+			</div>
 		{/key}
 	</div>
 
-	<!-- Опис на всю ширину під галереєю: у колонці з формою він заважав
-	     головному — вибрати розмір і купити. -->
-	<section class="mt-16 border-t pt-12">
-		<h2 class="font-heading text-2xl">Опис</h2>
-		<p class="mt-5 max-w-2xl leading-relaxed text-muted-foreground">{product.description}</p>
-	</section>
-
 	{#if data.recommended.length}
-		<section class="mt-24" use:reveal>
-			<div class="mb-8 flex items-baseline justify-between gap-4">
+		<section class="mt-24">
+			<div class="mb-8 flex items-baseline justify-between gap-4" use:reveal>
 				<h2 class="font-heading text-2xl">Вам також сподобається</h2>
 				<a
 					href="/catalog/{product.category.slug}"

@@ -19,14 +19,16 @@
 </div>
 
 {#if data.featured.length}
-	<section class="mx-auto max-w-6xl px-4 py-20" use:reveal>
-		<div class="mb-8 flex items-end justify-between gap-4">
+	<!-- Поява навішана на заголовок, а не на секцію: картки сітки
+	     проявляються самі, і подвійна анімація тільки заважала б. -->
+	<section class="mx-auto max-w-6xl px-4 py-20">
+		<div class="mb-8 flex items-end justify-between gap-4" use:reveal>
 			<div>
 				<p class="text-xs tracking-[0.2em] text-muted-foreground uppercase">Обране</p>
 				<h2 class="mt-1 font-heading text-3xl">Бестселери сезону</h2>
 			</div>
 			<Button href="/catalog" variant="ghost" class="hidden sm:inline-flex">
-				Усі товари
+				До каталогу
 				<ArrowRightIcon />
 			</Button>
 		</div>
@@ -36,8 +38,8 @@
 {/if}
 
 {#if data.newArrivals.length}
-	<section class="mx-auto max-w-6xl px-4 pb-8" use:reveal>
-		<div class="mb-8">
+	<section class="mx-auto max-w-6xl px-4 pb-8">
+		<div class="mb-8" use:reveal>
 			<p class="text-xs tracking-[0.2em] text-muted-foreground uppercase">Щойно завезли</p>
 			<h2 class="mt-1 font-heading text-3xl">Новинки</h2>
 		</div>

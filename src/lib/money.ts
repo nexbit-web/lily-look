@@ -3,15 +3,16 @@
  * Форматування живе тільки тут, щоб ціна виглядала однаково скрізь.
  */
 
-const formatter = new Intl.NumberFormat('uk-UA', {
-	style: 'currency',
-	currency: 'UAH',
-	maximumFractionDigits: 0
-});
+/**
+ * Форматуємо тільки число, а валюту дописуємо самі: `style: 'currency'` дає
+ * різний знак у різних середовищах (Node — «₴», Chrome — «грн»), і після
+ * гідратації ціна стрибала б у покупця на очах.
+ */
+const formatter = new Intl.NumberFormat('uk-UA', { maximumFractionDigits: 0 });
 
-/** 129900 → "1 299 ₴" */
+/** 129900 → "1 299 грн". Пробіл перед гривнею нерозривний. */
 export function formatPrice(kopiyky: number): string {
-	return formatter.format(kopiyky / 100);
+	return `${formatter.format(kopiyky / 100)}\u00a0грн`;
 }
 
 /** Знижка у відсотках, або null якщо старої ціни немає. */

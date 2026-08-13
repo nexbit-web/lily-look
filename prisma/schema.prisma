@@ -15,9 +15,11 @@ datasource db {
 // ─── Каталог ────────────────────────────────────────────────────────────────
 
 model Category {
-  id       String  @id @default(cuid())
-  slug     String  @unique
-  name     String
+  id   String @id @default(cuid())
+  slug String @unique
+  name String
+  /// Обкладинка категорії для вітрини /catalog. Заповнює CRM при створенні
+  /// категорії; без неї плитка показує заглушку.
   imageUrl String?
   position Int     @default(0)
 
@@ -27,7 +29,8 @@ model Category {
   parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
   children Category[] @relation("CategoryTree")
 
-  products Product[]
+  products  Product[]
+  discounts DiscountCategory[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -36,21 +39,28 @@ model Category {
 }
 
 model Product {
-  id          String  @id @default(cuid())
-  slug        String  @unique
+  id          String @id @default(cuid())
+  slug        String @unique
   name        String
   description String
-  /// Базова ціна в копійках.
+  /// Базова ціна в копійках — та, що без знижок. Знижки її не чіпають.
   price       Int
-  /// Стара ціна в копійках — показується закресленою, якщо вища за price.
-  compareAt   Int?
+  /// Ціна до сплати після знижок, у копійках.
+  ///
+  /// Рахує тригер у БД (`lily_recompute_prices`), тому колонка однакова для
+  /// сайту і для CRM — писати в неї вручну не треба. Знижка діє, коли
+  /// finalPrice < price: саме за цією умовою працюють фільтр «Знижки»
+  /// й закреслена стара ціна.
+  finalPrice  Int    @default(0)
 
   categoryId String
   category   Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
 
-  images   ProductImage[]
-  variants ProductVariant[]
+  images    ProductImage[]
+  variants  ProductVariant[]
+  discounts DiscountProduct[]
 
+  /// Вимикач моделі в CRM: false — товару на сайті немає взагалі.
   isActive   Boolean @default(true)
   isFeatured Boolean @default(false)
 
@@ -59,6 +69,7 @@ model Product {
 
   @@index([categoryId, isActive])
   @@index([isActive, createdAt])
+  @@index([isActive, finalPrice])
 }
 
 model ProductImage {
@@ -83,13 +94,82 @@ model ProductVariant {
   size     String
   color    String
   colorHex String?
-  /// Ціна в копійках, якщо відрізняється від Product.price (напр. XXL дорожчий).
+  /// Базова ціна в копійках, якщо відрізняється від Product.price
+  /// (напр. XXL дорожчий). NULL — беремо ціну товару.
   price    Int?
+  /// Ціна варіанта після знижок. NULL, коли немає власної ціни — тоді
+  /// діє Product.finalPrice. Рахує той самий тригер, що й для товару.
+  finalPrice Int?
+  /// Скільки одиниць саме цього розміру й кольору на складі.
+  /// 0 — розмір зникає з сайту; коли нуль у всіх варіантів,
+  /// товар зникає з каталогу, але сторінка лишається доступною.
   stock    Int     @default(0)
+  /// Вимикач конкретного розміру/кольору в CRM.
+  isActive Boolean @default(true)
 
   cartItems CartItem[]
 
   @@unique([productId, size, color])
+  @@index([productId])
+  @@index([productId, isActive, stock])
+}
+
+// ─── Знижки ─────────────────────────────────────────────────────────────────
+
+/// На що поширюється правило знижки.
+enum DiscountScope {
+  /// Весь каталог.
+  ALL
+  /// Обрані категорії (таблиця DiscountCategory).
+  CATEGORY
+  /// Обрані товари, хоч один (таблиця DiscountProduct).
+  PRODUCT
+}
+
+/// Правило знижки — єдине джерело правди про ціну.
+///
+/// CRM створює правило й вмикає його прапорцем `isActive`; підсумкову ціну
+/// перераховує тригер у БД. Правил може бути кілька одночасно — виграє те,
+/// що дає покупцеві найнижчу ціну (знижки не додаються одна до одної).
+///
+/// Задається або `percent`, або `amount` — не обидва (перевіряє CHECK у БД).
+model Discount {
+  id      String        @id @default(cuid())
+  name    String
+  scope   DiscountScope
+  /// Відсоток знижки, 1..90.
+  percent Int?
+  /// Фіксована знижка в копійках.
+  amount  Int?
+
+  isActive Boolean @default(false)
+
+  categories DiscountCategory[]
+  products   DiscountProduct[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+}
+
+model DiscountCategory {
+  discountId String
+  discount   Discount @relation(fields: [discountId], references: [id], onDelete: Cascade)
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([discountId, categoryId])
+  @@index([categoryId])
+}
+
+model DiscountProduct {
+  discountId String
+  discount   Discount @relation(fields: [discountId], references: [id], onDelete: Cascade)
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@id([discountId, productId])
   @@index([productId])
 }
 

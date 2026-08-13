@@ -9,8 +9,12 @@ const images = [
 ];
 
 /** Стрічка кадрів: перемикання — це зсув на 100% ширини за кадр. */
-const shift = () =>
-	(document.querySelector('[style*="translate3d"]') as HTMLElement).style.transform;
+function frame(): number {
+	const { transform } = (document.querySelector('[style*="translate3d"]') as HTMLElement).style;
+	const percent = Number(/calc\((-?\d+)%/.exec(transform)?.[1]);
+	// Math.abs — інакше на першому кадрі вийде -0, а це не те саме, що 0.
+	return Math.abs(percent) / 100;
+}
 
 describe('галерея товару', () => {
 	it('тримає всі кадри в стрічці й мініатюру на кожен', () => {
@@ -18,7 +22,7 @@ describe('галерея товару', () => {
 
 		expect(screen.getAllByRole('img')).toHaveLength(3);
 		expect(screen.getAllByRole('button', { name: /^Фото \d$/ })).toHaveLength(3);
-		expect(shift()).toContain('-0%');
+		expect(frame()).toBe(0);
 	});
 
 	it('мініатюра зсуває стрічку на потрібний кадр', async () => {
@@ -26,7 +30,7 @@ describe('галерея товару', () => {
 
 		await fireEvent.click(screen.getByRole('button', { name: 'Фото 2' }));
 
-		expect(shift()).toContain('-100%');
+		expect(frame()).toBe(1);
 		expect(screen.getByRole('button', { name: 'Фото 2' })).toHaveAttribute('aria-current', 'true');
 	});
 
@@ -34,10 +38,10 @@ describe('галерея товару', () => {
 		render(ProductGallery, { images, name: 'Сукня' });
 
 		await fireEvent.click(screen.getByRole('button', { name: 'Попереднє фото' }));
-		expect(shift()).toContain('-200%');
+		expect(frame()).toBe(2);
 
 		await fireEvent.click(screen.getByRole('button', { name: 'Наступне фото' }));
-		expect(shift()).toContain('-0%');
+		expect(frame()).toBe(0);
 	});
 
 	it('на одному фото не малює зайвих кнопок', () => {

@@ -40,7 +40,7 @@
 						class="rounded-xl px-3 py-2 text-sm hover:bg-accent"
 						onclick={() => (mobileOpen = false)}
 					>
-						Усі товари
+						Усі категорії
 					</a>
 					{#each categories as category (category.slug)}
 						<a
@@ -74,15 +74,21 @@
 		</nav>
 
 		<div class="ml-auto flex items-center gap-1">
+			<!--
+				Розмір іконок задається класом size-* саме на іконці.
+				У кнопці з ui/ прописано `[&_svg:not([class*='size-'])]:size-3.5`,
+				тож без такого класу (і з атрибутом size={…}) вона примусово
+				стискає будь-яку іконку до 14px.
+			-->
 			<Button variant="ghost" size="icon" aria-label="Пошук" onclick={() => (searchOpen = true)}>
-				<SearchIcon />
+				<SearchIcon class="size-4" />
 			</Button>
 
 			<Button href="/cart" variant="ghost" size="icon" class="relative" aria-label="Кошик">
-				<HandbagIcon />
+				<HandbagIcon class="size-4" />
 				{#if cartCount > 0}
 					<Badge
-						class="absolute -top-0.5 -right-0.5 size-5 justify-center rounded-full bg-brand p-0 text-[10px] text-brand-foreground tabular-nums"
+						class="absolute -top-0.5 -right-0.5 size-4 justify-center rounded-full bg-brand p-0 text-[10px] text-brand-foreground tabular-nums"
 					>
 						{cartCount}
 					</Badge>

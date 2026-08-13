@@ -33,10 +33,17 @@ export const PRODUCTS_PER_PAGE = 12;
 /** Безкоштовна доставка від цієї суми (у копійках). */
 export const FREE_DELIVERY_FROM = 200_000;
 
+/**
+ * Сортування каталогу.
+ *
+ * `label` — те, що бачить покупець (коротко, без «дешевші/дорожчі»);
+ * напрям ціни показує стрілка. `hint` іде в title і aria-label — інакше
+ * два пункти «Ціна» звучали б у скрінрідері однаково.
+ */
 export const SORT_OPTIONS = [
-	{ value: 'new', label: 'Спочатку новинки' },
-	{ value: 'price-asc', label: 'Спочатку дешевші' },
-	{ value: 'price-desc', label: 'Спочатку дорожчі' }
+	{ value: 'new', label: 'Новинки', direction: null, hint: 'Спочатку нові надходження' },
+	{ value: 'price-asc', label: 'Ціна', direction: 'asc', hint: 'Ціна: від меншої до більшої' },
+	{ value: 'price-desc', label: 'Ціна', direction: 'desc', hint: 'Ціна: від більшої до меншої' }
 ] as const;
 
 export type SortOption = (typeof SORT_OPTIONS)[number]['value'];

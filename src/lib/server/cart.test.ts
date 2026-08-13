@@ -47,11 +47,13 @@ const variant = (patch: Record<string, unknown> = {}) => ({
 	size: 'M',
 	color: 'Чорний',
 	stock: 5,
-	price: null,
+	isActive: true,
+	// finalPrice — те, що порахувала база з урахуванням знижок.
+	finalPrice: null,
 	product: {
 		name: 'Сукня Olivia',
 		slug: 'suknia-olivia',
-		price: 100_000,
+		finalPrice: 100_000,
 		isActive: true,
 		images: [{ url: 'https://example.test/1.jpg' }]
 	},
@@ -94,7 +96,7 @@ describe('readCart — ціни', () => {
 	});
 
 	it('ціна варіанта перебиває ціну товару', async () => {
-		cartWith([item({ quantity: 1, variant: variant({ price: 79_900 }) })]);
+		cartWith([item({ quantity: 1, variant: variant({ finalPrice: 79_900 }) })]);
 		const { cookies } = makeCookies({ lily_cart: 'cart-1' });
 
 		const cart = await readCart(cookies);
@@ -110,10 +112,12 @@ describe('readCart — ціни', () => {
 		expect(cart.subtotal).toBe(200_000);
 	});
 
-	it('викидає зняті з продажу товари й нульові залишки', async () => {
+	it('викидає зняті з продажу товари, вимкнені розміри й нульові залишки', async () => {
 		cartWith([
 			item({ id: 'a', variant: variant({ product: { ...variant().product, isActive: false } }) }),
 			item({ id: 'b', variant: variant({ stock: 0 }) }),
+			// Розмір вимкнули в CRM — позиція теж має зникнути з кошика.
+			item({ id: 'd', variant: variant({ isActive: false }) }),
 			item({ id: 'c' })
 		]);
 		const { cookies } = makeCookies({ lily_cart: 'cart-1' });
@@ -270,8 +274,22 @@ describe('addToCart', () => {
 		const { cookies } = makeCookies({ lily_cart: 'cart-1' });
 		db.productVariant.findUnique.mockResolvedValue({
 			id: 'var-1',
+			isActive: true,
 			stock: 5,
 			product: { isActive: false }
+		});
+
+		await expect(addToCart(cookies, 'var-1')).resolves.toMatchObject({ ok: false });
+		expect(db.cartItem.create).not.toHaveBeenCalled();
+	});
+
+	it('не додає розмір, вимкнений у CRM', async () => {
+		const { cookies } = makeCookies({ lily_cart: 'cart-1' });
+		db.productVariant.findUnique.mockResolvedValue({
+			id: 'var-1',
+			isActive: false,
+			stock: 5,
+			product: { isActive: true }
 		});
 
 		await expect(addToCart(cookies, 'var-1')).resolves.toMatchObject({ ok: false });
@@ -282,6 +300,7 @@ describe('addToCart', () => {
 		const { cookies } = makeCookies({ lily_cart: 'cart-1' });
 		db.productVariant.findUnique.mockResolvedValue({
 			id: 'var-1',
+			isActive: true,
 			stock: 0,
 			product: { isActive: true }
 		});
@@ -295,6 +314,7 @@ describe('addToCart', () => {
 		db.cart.findUnique.mockResolvedValue({ id: 'cart-1', items: [item()] });
 		db.productVariant.findUnique.mockResolvedValue({
 			id: 'var-1',
+			isActive: true,
 			stock: 3,
 			product: { isActive: true }
 		});
@@ -313,6 +333,7 @@ describe('addToCart', () => {
 		const { cookies, writes } = makeCookies();
 		db.productVariant.findUnique.mockResolvedValue({
 			id: 'var-1',
+			isActive: true,
 			stock: 5,
 			product: { isActive: true }
 		});

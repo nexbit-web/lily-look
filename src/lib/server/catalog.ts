@@ -1,5 +1,11 @@
 import { PRODUCTS_PER_PAGE, SIZE_ORDER, type SortOption } from '$lib/config';
-import type { CatalogFacets, CategoryLink, ProductCard, ProductDetail } from '$lib/types';
+import type {
+	CatalogFacets,
+	CategoryCard,
+	CategoryLink,
+	ProductCard,
+	ProductDetail
+} from '$lib/types';
 import type { Prisma } from '../../../prisma/generated/client.js';
 import { db } from './db.js';
 
@@ -19,35 +25,54 @@ export type CatalogFilters = {
 	page?: number;
 };
 
+/**
+ * Що взагалі можна показувати покупцеві.
+ *
+ * Товар живий, якщо його не вимкнули в CRM і є хоч один увімкнений варіант
+ * із залишком. Розібрали останній розмір — товар зникає зі списків сам,
+ * без жодної ручної дії менеджера.
+ */
+export const AVAILABLE_VARIANT = { isActive: true, stock: { gt: 0 } } as const;
+
+const VISIBLE_PRODUCT = {
+	isActive: true,
+	variants: { some: AVAILABLE_VARIANT }
+} satisfies Prisma.ProductWhereInput;
+
 const CARD_SELECT = {
 	id: true,
 	slug: true,
 	name: true,
 	price: true,
-	compareAt: true,
-	images: { select: { url: true, alt: true }, orderBy: { position: 'asc' }, take: 1 },
-	variants: { select: { color: true, stock: true } }
+	finalPrice: true,
+	// Два фото: перше — обкладинка, друге проявляється при наведенні.
+	images: { select: { url: true, alt: true }, orderBy: { position: 'asc' }, take: 2 },
+	variants: { where: AVAILABLE_VARIANT, select: { color: true, stock: true } }
 } satisfies Prisma.ProductSelect;
 
 type CardRow = Prisma.ProductGetPayload<{ select: typeof CARD_SELECT }>;
 
 function toCard(row: CardRow): ProductCard {
-	const image = row.images[0];
+	const [image, hoverImage] = row.images;
 	return {
 		id: row.id,
 		slug: row.slug,
 		name: row.name,
-		price: row.price,
-		compareAt: row.compareAt,
+		price: row.finalPrice,
+		// Стару ціну показуємо тільки тоді, коли знижка справді діє.
+		compareAt: row.finalPrice < row.price ? row.price : null,
 		image: image ? { url: image.url, alt: image.alt ?? row.name } : null,
+		hoverImage: hoverImage ? { url: hoverImage.url, alt: hoverImage.alt ?? row.name } : null,
 		colors: [...new Set(row.variants.map((variant) => variant.color))],
-		inStock: row.variants.some((variant) => variant.stock > 0)
+		inStock: row.variants.length > 0
 	};
 }
 
 function orderBy(sort: SortOption = 'new'): Prisma.ProductOrderByWithRelationInput {
-	if (sort === 'price-asc') return { price: 'asc' };
-	if (sort === 'price-desc') return { price: 'desc' };
+	// Сортуємо за ціною до сплати — інакше товар зі знижкою стояв би не там,
+	// де його бачить покупець.
+	if (sort === 'price-asc') return { finalPrice: 'asc' };
+	if (sort === 'price-desc') return { finalPrice: 'desc' };
 	return { createdAt: 'desc' };
 }
 
@@ -55,8 +80,9 @@ function buildWhere(filters: CatalogFilters): Prisma.ProductWhereInput {
 	const { categorySlug, sizes, colors, query, sale } = filters;
 
 	// Розмір і колір фільтруються по варіантах: товар підходить, якщо
-	// існує хоч один варіант, що задовольняє всі обрані умови одночасно.
-	const variantConditions: Prisma.ProductVariantWhereInput = {};
+	// існує хоч один доступний варіант, що задовольняє всі обрані умови
+	// одночасно. Розмір, якого немає на складі, не має «знаходити» товар.
+	const variantConditions: Prisma.ProductVariantWhereInput = { ...AVAILABLE_VARIANT };
 	if (sizes?.length) variantConditions.size = { in: sizes };
 	if (colors?.length) variantConditions.color = { in: colors };
 
@@ -64,10 +90,10 @@ function buildWhere(filters: CatalogFilters): Prisma.ProductWhereInput {
 
 	return {
 		isActive: true,
+		variants: { some: variantConditions },
 		...(categorySlug ? { category: { slug: categorySlug } } : {}),
-		...(Object.keys(variantConditions).length ? { variants: { some: variantConditions } } : {}),
 		// Порівняння двох колонок — через field reference, а не сирий SQL.
-		...(sale ? { compareAt: { gt: db.product.fields.price } } : {}),
+		...(sale ? { finalPrice: { lt: db.product.fields.price } } : {}),
 		...(search
 			? {
 					OR: [
@@ -85,7 +111,7 @@ export async function listCategories(): Promise<CategoryLink[]> {
 		select: {
 			slug: true,
 			name: true,
-			_count: { select: { products: { where: { isActive: true } } } }
+			_count: { select: { products: { where: VISIBLE_PRODUCT } } }
 		}
 	});
 
@@ -94,6 +120,33 @@ export async function listCategories(): Promise<CategoryLink[]> {
 		name: row.name,
 		productCount: row._count.products
 	}));
+}
+
+/**
+ * Вітрина категорій на /catalog.
+ *
+ * Фото категорії лежить у самій категорії (`Category.imageUrl`) — сюди воно
+ * тільки віддається. Порожні категорії не показуємо: клікати в них немає сенсу.
+ */
+export async function listCategoryCards(): Promise<CategoryCard[]> {
+	const rows = await db.category.findMany({
+		orderBy: [{ position: 'asc' }, { name: 'asc' }],
+		select: {
+			slug: true,
+			name: true,
+			imageUrl: true,
+			_count: { select: { products: { where: VISIBLE_PRODUCT } } }
+		}
+	});
+
+	return rows
+		.filter((row) => row._count.products > 0)
+		.map((row) => ({
+			slug: row.slug,
+			name: row.name,
+			productCount: row._count.products,
+			imageUrl: row.imageUrl
+		}));
 }
 
 export async function getCategory(slug: string) {
@@ -128,7 +181,7 @@ export async function listProducts(filters: CatalogFilters) {
 
 export async function listFeatured(limit = 8): Promise<ProductCard[]> {
 	const rows = await db.product.findMany({
-		where: { isActive: true, isFeatured: true },
+		where: { ...VISIBLE_PRODUCT, isFeatured: true },
 		select: CARD_SELECT,
 		orderBy: { createdAt: 'desc' },
 		take: limit
@@ -139,7 +192,9 @@ export async function listFeatured(limit = 8): Promise<ProductCard[]> {
 /** Товари зі знижкою — для промо-банера і сторінки розпродажу. */
 export async function listSale(limit = 4): Promise<ProductCard[]> {
 	const rows = await db.product.findMany({
-		where: { isActive: true, compareAt: { gt: db.product.fields.price } },
+		// Знижка діє, коли ціна до сплати нижча за базову. Порівняння двох
+		// колонок — через field reference, а не сирий SQL.
+		where: { ...VISIBLE_PRODUCT, finalPrice: { lt: db.product.fields.price } },
 		select: CARD_SELECT,
 		orderBy: { createdAt: 'desc' },
 		take: limit
@@ -149,7 +204,7 @@ export async function listSale(limit = 4): Promise<ProductCard[]> {
 
 export async function listNewArrivals(limit = 4): Promise<ProductCard[]> {
 	const rows = await db.product.findMany({
-		where: { isActive: true },
+		where: VISIBLE_PRODUCT,
 		select: CARD_SELECT,
 		orderBy: { createdAt: 'desc' },
 		take: limit
@@ -161,6 +216,8 @@ export async function listNewArrivals(limit = 4): Promise<ProductCard[]> {
 export async function listFacets(categorySlug?: string): Promise<CatalogFacets> {
 	const rows = await db.productVariant.findMany({
 		where: {
+			// Фільтр пропонує тільки те, що реально можна купити.
+			...AVAILABLE_VARIANT,
 			product: {
 				isActive: true,
 				...(categorySlug ? { category: { slug: categorySlug } } : {})
@@ -193,6 +250,13 @@ export async function listFacets(categorySlug?: string): Promise<CatalogFacets> 
 	};
 }
 
+/**
+ * Сторінка товару.
+ *
+ * Вимкнений у CRM товар не відкривається взагалі (404). Розпроданий —
+ * відкривається, але без варіантів: сторінка лишається за старим посиланням,
+ * а купити нічого не можна. Так не ламаються збережені посилання й видача.
+ */
 export async function getProduct(slug: string): Promise<ProductDetail | null> {
 	const row = await db.product.findFirst({
 		where: { slug, isActive: true },
@@ -202,11 +266,19 @@ export async function getProduct(slug: string): Promise<ProductDetail | null> {
 			name: true,
 			description: true,
 			price: true,
-			compareAt: true,
+			finalPrice: true,
 			category: { select: { slug: true, name: true } },
 			images: { select: { url: true, alt: true }, orderBy: { position: 'asc' } },
 			variants: {
-				select: { id: true, size: true, color: true, colorHex: true, price: true, stock: true },
+				where: AVAILABLE_VARIANT,
+				select: {
+					id: true,
+					size: true,
+					color: true,
+					colorHex: true,
+					finalPrice: true,
+					stock: true
+				},
 				orderBy: [{ color: 'asc' }, { size: 'asc' }]
 			}
 		}
@@ -215,12 +287,22 @@ export async function getProduct(slug: string): Promise<ProductDetail | null> {
 	if (!row) return null;
 
 	return {
-		...row,
+		id: row.id,
+		slug: row.slug,
+		name: row.name,
+		description: row.description,
+		price: row.finalPrice,
+		compareAt: row.finalPrice < row.price ? row.price : null,
+		category: row.category,
 		images: row.images.map((image) => ({ url: image.url, alt: image.alt ?? row.name })),
 		variants: row.variants.map((variant) => ({
-			...variant,
-			// Варіант може мати власну ціну; якщо ні — успадковує базову.
-			price: variant.price ?? row.price
+			id: variant.id,
+			size: variant.size,
+			color: variant.color,
+			colorHex: variant.colorHex,
+			// Варіант може мати власну ціну; якщо ні — успадковує ціну товару.
+			price: variant.finalPrice ?? row.finalPrice,
+			stock: variant.stock
 		}))
 	};
 }
@@ -247,20 +329,21 @@ const RECOMMENDATION_WEIGHTS = {
 	/** Максимум за повний збіг цінового сегмента. */
 	priceProximity: 25,
 	hasDiscount: 8,
-	featured: 6,
-	outOfStock: -60
+	featured: 6
 } as const;
 
 const RECOMMENDATION_POOL = 60;
 
 export async function listRecommended(product: ProductDetail, limit = 4): Promise<ProductCard[]> {
 	const rows = await db.product.findMany({
-		where: { isActive: true, id: { not: product.id } },
+		// Радити те, чого немає на складі, немає сенсу — такі товари
+		// відсіюються ще в запиті, а не штрафом у скорингу.
+		where: { ...VISIBLE_PRODUCT, id: { not: product.id } },
 		select: {
 			...CARD_SELECT,
 			isFeatured: true,
 			category: { select: { slug: true } },
-			variants: { select: { color: true, size: true, stock: true } }
+			variants: { where: AVAILABLE_VARIANT, select: { color: true, size: true, stock: true } }
 		},
 		// Пул обмежений: ранжувати всю базу в пам'яті не потрібно й дорого.
 		orderBy: { createdAt: 'desc' },
@@ -286,24 +369,19 @@ export async function listRecommended(product: ProductDetail, limit = 4): Promis
 			RECOMMENDATION_WEIGHTS.colorMatchCap
 		);
 
-		const hasMatchingSize = row.variants.some(
-			(variant) => variant.stock > 0 && sourceSizes.has(variant.size)
-		);
+		const hasMatchingSize = row.variants.some((variant) => sourceSizes.has(variant.size));
 		if (hasMatchingSize) score += RECOMMENDATION_WEIGHTS.sizeInStock;
 
 		// Ціна: чим ближчий сегмент, тим вищий бал. Різниця нормується
 		// на більшу з двох цін, тож шкала однакова для 500 і 5000 грн.
-		const priceGap = Math.abs(row.price - product.price);
-		const priceScale = Math.max(row.price, product.price, 1);
+		const priceGap = Math.abs(row.finalPrice - product.price);
+		const priceScale = Math.max(row.finalPrice, product.price, 1);
 		score += RECOMMENDATION_WEIGHTS.priceProximity * (1 - Math.min(1, priceGap / priceScale));
 
-		if (row.compareAt && row.compareAt > row.price) {
+		if (row.finalPrice < row.price) {
 			score += RECOMMENDATION_WEIGHTS.hasDiscount;
 		}
 		if (row.isFeatured) score += RECOMMENDATION_WEIGHTS.featured;
-		if (!row.variants.some((variant) => variant.stock > 0)) {
-			score += RECOMMENDATION_WEIGHTS.outOfStock;
-		}
 
 		return { row, score };
 	});

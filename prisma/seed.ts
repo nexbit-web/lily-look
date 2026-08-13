@@ -24,13 +24,46 @@ const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) })
 const photo = (id: string) =>
 	`https://images.unsplash.com/photo-${id}?auto=format&fit=crop&w=1200&h=1600&q=80`;
 
+/** Обкладинка категорії — квадратний кроп під плитку каталогу. */
+const cover = (id: string) =>
+	`https://images.unsplash.com/photo-${id}?auto=format&fit=crop&w=1000&h=1000&q=80`;
+
+/**
+ * Кожна категорія має власне фото в базі (`Category.imageUrl`) — каталог
+ * тільки виводить його. Замінюючи демо-знімки на свої, міняй саме тут.
+ */
 const CATEGORIES = [
-	{ slug: 'sukni', name: 'Сукні', position: 1 },
-	{ slug: 'verkhniy-odiah', name: 'Верхній одяг', position: 2 },
-	{ slug: 'kostiumy', name: 'Костюми', position: 3 },
-	{ slug: 'bluzy', name: 'Блузи та сорочки', position: 4 },
-	{ slug: 'spidnytsi', name: 'Спідниці', position: 5 },
-	{ slug: 'trykotazh', name: 'Трикотаж', position: 6 }
+	{ slug: 'sukni', name: 'Сукні', position: 1, imageUrl: cover('1515372039744-b8f02a3ae446') },
+	{
+		slug: 'verkhniy-odiah',
+		name: 'Верхній одяг',
+		position: 2,
+		imageUrl: cover('1539109136881-3be0616acf4b')
+	},
+	{
+		slug: 'kostiumy',
+		name: 'Костюми',
+		position: 3,
+		imageUrl: cover('1503342217505-b0a15ec3261c')
+	},
+	{
+		slug: 'bluzy',
+		name: 'Блузи та сорочки',
+		position: 4,
+		imageUrl: cover('1595777457583-95e059d581b8')
+	},
+	{
+		slug: 'spidnytsi',
+		name: 'Спідниці',
+		position: 5,
+		imageUrl: cover('1594633312681-425c7b97ccd1')
+	},
+	{
+		slug: 'trykotazh',
+		name: 'Трикотаж',
+		position: 6,
+		imageUrl: cover('1483985988355-763728e1935b')
+	}
 ];
 
 type SeedProduct = {
@@ -40,7 +73,6 @@ type SeedProduct = {
 	category: string;
 	/** Ціни — у копійках. */
 	price: number;
-	compareAt?: number;
 	featured?: boolean;
 	images: string[];
 	sizes: string[];
@@ -55,7 +87,6 @@ const PRODUCTS: SeedProduct[] = [
 			'Класична сукня-міді з віскози з приталеним ліфом і вільною спідницею. Тримає форму, не мнеться в дорозі й однаково доречна на роботі та вечері.',
 		category: 'sukni',
 		price: 219900,
-		compareAt: 269900,
 		featured: true,
 		images: ['1515372039744-b8f02a3ae446', '1483985988355-763728e1935b'],
 		sizes: ['XS', 'S', 'M', 'L'],
@@ -100,7 +131,6 @@ const PRODUCTS: SeedProduct[] = [
 			'Вовняне пальто прямого крою з приспущеним плечем і поясом у комплекті. 70% вовна, підкладка з віскози.',
 		category: 'verkhniy-odiah',
 		price: 549900,
-		compareAt: 649900,
 		featured: true,
 		images: ['1469334031218-e382a71b716b', '1496747611176-843222e1e57c'],
 		sizes: ['S', 'M', 'L'],
@@ -144,7 +174,6 @@ const PRODUCTS: SeedProduct[] = [
 			'Подовжений жакет на підкладці й прямі брюки зі стрілками. Костюмна тканина з домішкою еластану — не витягується на колінах.',
 		category: 'kostiumy',
 		price: 499900,
-		compareAt: 579900,
 		featured: true,
 		images: ['1503342217505-b0a15ec3261c', '1502716119720-b23a93e5fe1b'],
 		sizes: ['XS', 'S', 'M', 'L'],
@@ -188,7 +217,6 @@ const PRODUCTS: SeedProduct[] = [
 			'Бавовняна сорочка вільного крою з подовженою спинкою. Носиться і як сорочка, і як легка накидка.',
 		category: 'bluzy',
 		price: 159900,
-		compareAt: 189900,
 		images: ['1576995853123-5a10305d93c0', '1571945153237-4929e783af4a'],
 		sizes: ['S', 'M', 'L', 'XL'],
 		colors: [
@@ -247,13 +275,54 @@ const PRODUCTS: SeedProduct[] = [
 			'Кардиган нижче колін із кишенями по боках. Найуніверсальніший верхній шар для міжсезоння.',
 		category: 'trykotazh',
 		price: 249900,
-		compareAt: 289900,
 		images: ['1479064555552-3ef4979f8908', '1441984904996-e0b6ba687e04'],
 		sizes: ['S', 'M', 'L', 'XL'],
 		colors: [
 			{ name: 'Бежевий', hex: '#D9C7A7' },
 			{ name: 'Графітовий', hex: '#3F3F46' }
 		]
+	}
+];
+
+/**
+ * Демо-знижки — по одній на кожен спосіб призначення.
+ *
+ * Ціну зі знижкою рахує сама база (тригер `lily_recompute_prices`), тож тут
+ * створюються лише правила. Так само їх створюватиме CRM.
+ */
+type SeedDiscount = {
+	name: string;
+	scope: 'ALL' | 'CATEGORY' | 'PRODUCT';
+	/** Або відсоток, або сума в копійках — не обидва.  */
+	percent?: number;
+	amount?: number;
+	isActive: boolean;
+	categories?: string[];
+	products?: string[];
+};
+
+const DISCOUNTS: SeedDiscount[] = [
+	{
+		name: 'Розпродаж трикотажу',
+		scope: 'CATEGORY',
+		percent: 20,
+		isActive: true,
+		categories: ['trykotazh']
+	},
+	{
+		name: 'Обрані моделі',
+		scope: 'PRODUCT',
+		percent: 15,
+		isActive: true,
+		products: ['suknia-midi-amelie', 'palto-oversize-margo', 'spidnytsia-plisse-adele']
+	},
+	{
+		// Приклад вимкненого правила: лежить у базі, ціни не чіпає,
+		// вмикається одним прапорцем у CRM.
+		name: 'Чорна п’ятниця',
+		scope: 'ALL',
+		percent: 25,
+		isActive: false
 	}
 ];
 
@@ -270,6 +339,9 @@ async function main() {
 	await prisma.order.deleteMany();
 	await prisma.cartItem.deleteMany();
 	await prisma.cart.deleteMany();
+	// Знижки — першими: інакше кожне видалення товару чи категорії тягнуло б
+	// за собою каскад і зайвий перерахунок цін.
+	await prisma.discount.deleteMany();
 	await prisma.productImage.deleteMany();
 	await prisma.productVariant.deleteMany();
 	await prisma.product.deleteMany();
@@ -293,7 +365,6 @@ async function main() {
 				name: product.name,
 				description: product.description,
 				price: product.price,
-				compareAt: product.compareAt ?? null,
 				isFeatured: product.featured ?? false,
 				categoryId: id,
 				images: {
@@ -318,13 +389,46 @@ async function main() {
 		});
 	}
 
-	const [productCount, variantCount] = await Promise.all([
+	console.log('Створення знижок…');
+	const products = await prisma.product.findMany({ select: { id: true, slug: true } });
+	const productId = new Map(products.map((product) => [product.slug, product.id]));
+
+	for (const discount of DISCOUNTS) {
+		await prisma.discount.create({
+			data: {
+				name: discount.name,
+				scope: discount.scope,
+				percent: discount.percent ?? null,
+				amount: discount.amount ?? null,
+				isActive: discount.isActive,
+				categories: {
+					create: (discount.categories ?? []).map((slug) => {
+						const id = categoryId.get(slug);
+						if (!id) throw new Error(`Невідома категорія у знижці: ${slug}`);
+						return { categoryId: id };
+					})
+				},
+				products: {
+					create: (discount.products ?? []).map((slug) => {
+						const id = productId.get(slug);
+						if (!id) throw new Error(`Невідомий товар у знижці: ${slug}`);
+						return { productId: id };
+					})
+				}
+			}
+		});
+	}
+
+	const [productCount, variantCount, discounted] = await Promise.all([
 		prisma.product.count(),
-		prisma.productVariant.count()
+		prisma.productVariant.count(),
+		// Ціни поставив тригер — перевіряємо, що він відпрацював.
+		prisma.product.count({ where: { finalPrice: { lt: prisma.product.fields.price } } })
 	]);
 
 	console.log(
-		`Готово: ${CATEGORIES.length} категорій, ${productCount} товарів, ${variantCount} варіантів.`
+		`Готово: ${CATEGORIES.length} категорій, ${productCount} товарів, ${variantCount} варіантів, ` +
+			`${DISCOUNTS.length} правил знижок (зі знижкою зараз ${discounted} товарів).`
 	);
 }
 

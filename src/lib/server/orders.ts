@@ -60,7 +60,9 @@ export async function createOrder(
 				// Умова stock >= quantity прямо в UPDATE робить перевірку
 				// й списання атомарними — без гонок між паралельними покупцями.
 				const updated = await tx.productVariant.updateMany({
-					where: { id: line.variantId, stock: { gte: line.quantity } },
+					// isActive — щоб не продати розмір, який вимкнули в CRM
+					// між переглядом кошика й натисканням «Оформити».
+					where: { id: line.variantId, isActive: true, stock: { gte: line.quantity } },
 					data: { stock: { decrement: line.quantity } }
 				});
 				if (updated.count === 0) throw new OutOfStockError(line.productName);

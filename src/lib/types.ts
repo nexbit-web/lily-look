@@ -12,6 +12,14 @@ export type CategoryLink = {
 	productCount: number;
 };
 
+/** Категорія на вітрині /catalog: фото, назва, скільки всередині. */
+export type CategoryCard = {
+	slug: string;
+	name: string;
+	productCount: number;
+	imageUrl: string | null;
+};
+
 export type ProductCard = {
 	id: string;
 	slug: string;
@@ -20,6 +28,8 @@ export type ProductCard = {
 	price: number;
 	compareAt: number | null;
 	image: { url: string; alt: string } | null;
+	/** Друге фото — проявляється при наведенні на картку. */
+	hoverImage: { url: string; alt: string } | null;
 	colors: string[];
 	inStock: boolean;
 };
