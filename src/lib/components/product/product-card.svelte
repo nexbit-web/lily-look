@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { discountPercent, formatPrice } from '$lib/money';
+	import { plural } from '$lib/plural';
 	import type { ProductCard } from '$lib/types';
 
 	let { product, priority = false }: { product: ProductCard; priority?: boolean } = $props();
@@ -48,7 +49,10 @@
 			{/if}
 		</p>
 		{#if product.colors.length > 1}
-			<p class="text-xs text-muted-foreground">{product.colors.length} кольори</p>
+			<p class="text-xs text-muted-foreground">
+				{product.colors.length}
+				{plural(product.colors.length, 'колір', 'кольори', 'кольорів')}
+			</p>
 		{/if}
 	</div>
 </a>

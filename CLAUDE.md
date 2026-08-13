@@ -20,6 +20,8 @@
 
 ```bash
 npm run dev            # дев-сервер
+npm test               # vitest run — два проекта: server (node) и client (jsdom)
+npm run test:watch     # то же в watch-режиме
 npm run check          # svelte-check — гоняй после правок типов
 npm run lint           # prettier --check + eslint
 npm run format         # prettier --write
@@ -28,7 +30,12 @@ npm run db:seed        # перезалить демо-каталог (снач�
 npm run db:studio      # GUI к базе
 ```
 
-Проверка перед сдачей задачи: `npm run check && npm run lint`.
+Проверка перед сдачей задачи: `npm test && npm run check && npm run lint`.
+
+**Тесты.** Юнит-тесты лежат рядом с кодом: `*.test.ts` — серверная логика (node),
+`*.svelte.test.ts` — компоненты (jsdom + @testing-library/svelte). Prisma в тестах
+не поднимается: `db` мокается через `vi.mock('./db.js', …)`, так что тесты не ходят
+в Neon и не требуют `.env`.
 
 ## Где что лежит
 

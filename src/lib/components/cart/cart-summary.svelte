@@ -3,6 +3,7 @@
 	import { Progress } from '$lib/components/ui/progress';
 	import { FREE_DELIVERY_FROM } from '$lib/config';
 	import { formatPrice } from '$lib/money';
+	import { plural } from '$lib/plural';
 	import ArrowRightIcon from '@lucide/svelte/icons/arrow-right';
 
 	let { subtotal, count }: { subtotal: number; count: number } = $props();
@@ -10,16 +11,6 @@
 	const missing = $derived(FREE_DELIVERY_FROM - subtotal);
 	const freeDelivery = $derived(missing <= 0);
 	const progress = $derived(Math.min(100, (subtotal / FREE_DELIVERY_FROM) * 100));
-
-	/** 1 товар, 2 товари, 5 товарів. */
-	function plural(value: number, one: string, few: string, many: string): string {
-		const tens = value % 100;
-		if (tens > 10 && tens < 20) return many;
-		const ones = value % 10;
-		if (ones === 1) return one;
-		if (ones >= 2 && ones <= 4) return few;
-		return many;
-	}
 </script>
 
 <aside class="lg:sticky lg:top-24 lg:self-start">
@@ -48,7 +39,7 @@
 			<div class="mt-6 space-y-2">
 				<Progress
 					value={progress}
-					class="h-[3px] overflow-hidden rounded-full bg-foreground/10 [&>[data-slot=progress-indicator]]:bg-brand"
+					class="h-0.75 overflow-hidden rounded-full bg-foreground/10 *:data-[slot=progress-indicator]:bg-brand"
 				/>
 				<p class="text-xs text-muted-foreground">
 					Ще {formatPrice(missing)} — і доставка безкоштовна

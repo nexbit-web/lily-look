@@ -14,17 +14,12 @@ export const actions: Actions = {
 		const form = await request.formData();
 		const itemId = String(form.get('itemId') ?? '');
 		const raw = form.get('quantity');
-		const quantity = Number(raw);
 
-		// raw === null окремо: без цієї перевірки Number(null) дав би 0,
-		// і форма без поля тихо видалила б позицію.
-		if (
-			!itemId ||
-			raw === null ||
-			!Number.isInteger(quantity) ||
-			quantity < 0 ||
-			quantity > MAX_QUANTITY
-		) {
+		// Порожнє поле й відсутнє поле — окремо: Number('') і Number(null)
+		// дорівнюють нулю, тож підроблена форма тихо видалила б позицію.
+		const quantity = typeof raw === 'string' && raw.trim() !== '' ? Number(raw) : Number.NaN;
+
+		if (!itemId || !Number.isInteger(quantity) || quantity < 0 || quantity > MAX_QUANTITY) {
 			return fail(400, { message: 'Некоректний запит.' });
 		}
 

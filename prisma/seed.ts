@@ -20,10 +20,7 @@ if (!connectionString) {
 
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
 
-/**
- * Жорсткий кроп 1200×1600 (3:4). Фіксовані розміри потрібні лайтбоксу:
- * PhotoSwipe рахує зум до того, як фото завантажиться.
- */
+/** Жорсткий кроп 1200×1600 (3:4) — усі картки й галереї розраховані на цю пропорцію. */
 const photo = (id: string) =>
 	`https://images.unsplash.com/photo-${id}?auto=format&fit=crop&w=1200&h=1600&q=80`;
 

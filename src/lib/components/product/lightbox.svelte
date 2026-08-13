@@ -4,15 +4,17 @@
 	import ChevronLeftIcon from '@lucide/svelte/icons/chevron-left';
 	import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
 	import XIcon from '@lucide/svelte/icons/x';
+	import ZoomInIcon from '@lucide/svelte/icons/zoom-in';
+	import ZoomOutIcon from '@lucide/svelte/icons/zoom-out';
 	import { Dialog as DialogPrimitive } from 'bits-ui';
 
 	/**
 	 * Перегляд фото на весь екран.
 	 *
-	 * Свій, замість зовнішньої бібліотеки: тут потрібні рівно чотири речі —
-	 * гортання, зум по кліку, свайп пальцем і закриття. Усе інше (портал,
-	 * пастка фокуса, блокування скролу, Esc) уже вміє Dialog з bits-ui,
-	 * на якому побудовані й компоненти shadcn.
+	 * Свій, замість зовнішньої бібліотеки: потрібні рівно чотири речі —
+	 * гортання, зум по кліку, перетягування збільшеного фото і закриття.
+	 * Усе інше (портал, пастка фокуса, блокування скролу, Esc) уже вміє
+	 * Dialog з bits-ui, на якому побудовані й компоненти shadcn.
 	 */
 
 	let {
@@ -34,13 +36,22 @@
 	const current = $derived(images[index]);
 	const many = $derived(images.length > 1);
 
-	let zoomed = $state(false);
-	let origin = $state('50% 50%');
-	let loading = $state(true);
+	let areaEl = $state<HTMLElement | null>(null);
+	let imageEl = $state<HTMLImageElement | null>(null);
 
-	let dragX = $state(0);
+	let loading = $state(true);
+	let zoomed = $state(false);
+
+	// Зсув фото: у зумі це панорамування, без зуму — свайп між кадрами.
+	let panX = $state(0);
+	let panY = $state(0);
+	let swipeX = $state(0);
+
 	let dragging = $state(false);
 	let startX = 0;
+	let startY = 0;
+	let fromX = 0;
+	let fromY = 0;
 	let moved = false;
 
 	function go(delta: number) {
@@ -48,14 +59,16 @@
 		index = (index + delta + images.length) % images.length;
 	}
 
-	function show(next: number) {
-		index = next;
+	function resetZoom() {
+		zoomed = false;
+		panX = 0;
+		panY = 0;
 	}
 
-	// Зум і «завантажується» скидаються на кожному новому фото.
+	// Нове фото — знову без зуму й з «завантажується».
 	$effect(() => {
 		void index;
-		zoomed = false;
+		resetZoom();
 		loading = true;
 	});
 
@@ -74,35 +87,74 @@
 		if (event.key === 'ArrowRight') go(1);
 	}
 
-	function toggleZoom(event: MouseEvent) {
-		// Клік після протягування — це кінець свайпу, а не намір зумити.
-		if (moved) return;
+	const clamp = (value: number, max: number) => Math.min(max, Math.max(-max, value));
 
-		const target = event.currentTarget as HTMLElement;
-		const box = target.getBoundingClientRect();
-		origin = `${((event.clientX - box.left) / box.width) * 100}% ${((event.clientY - box.top) / box.height) * 100}%`;
-		zoomed = !zoomed;
+	/** За скільки пікселів фото виходить за екран — далі тягнути нікуди. */
+	function limits() {
+		if (!areaEl || !imageEl) return { x: 0, y: 0 };
+		return {
+			x: Math.max(0, (imageEl.offsetWidth * ZOOM_SCALE - areaEl.clientWidth) / 2),
+			y: Math.max(0, (imageEl.offsetHeight * ZOOM_SCALE - areaEl.clientHeight) / 2)
+		};
+	}
+
+	/** Зум із наведенням: точка, по якій клікнули, їде в центр екрана. */
+	function zoomTo(clientX?: number, clientY?: number) {
+		if (!imageEl) return;
+
+		const box = imageEl.getBoundingClientRect();
+		const dx = clientX === undefined ? 0 : clientX - (box.left + box.width / 2);
+		const dy = clientY === undefined ? 0 : clientY - (box.top + box.height / 2);
+
+		zoomed = true;
+		const max = limits();
+		panX = clamp(-dx * ZOOM_SCALE, max.x);
+		panY = clamp(-dy * ZOOM_SCALE, max.y);
 	}
 
 	function pointerdown(event: PointerEvent) {
-		if (zoomed || !many || event.button !== 0) return;
+		if (event.button !== 0) return;
+		if (!zoomed && !many) return;
+
 		dragging = true;
 		moved = false;
 		startX = event.clientX;
-		(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+		startY = event.clientY;
+		fromX = panX;
+		fromY = panY;
+		imageEl?.setPointerCapture(event.pointerId);
 	}
 
 	function pointermove(event: PointerEvent) {
 		if (!dragging) return;
-		dragX = event.clientX - startX;
-		if (Math.abs(dragX) > 6) moved = true;
+
+		const dx = event.clientX - startX;
+		const dy = event.clientY - startY;
+		if (Math.abs(dx) > 6 || Math.abs(dy) > 6) moved = true;
+
+		if (zoomed) {
+			const max = limits();
+			panX = clamp(fromX + dx, max.x);
+			panY = clamp(fromY + dy, max.y);
+		} else {
+			swipeX = dx;
+		}
 	}
 
 	function pointerup() {
 		if (!dragging) return;
 		dragging = false;
-		if (Math.abs(dragX) > SWIPE_THRESHOLD) go(dragX < 0 ? 1 : -1);
-		dragX = 0;
+
+		if (zoomed) return;
+		if (Math.abs(swipeX) > SWIPE_THRESHOLD) go(swipeX < 0 ? 1 : -1);
+		swipeX = 0;
+	}
+
+	function onphotoclick(event: MouseEvent) {
+		// Клік після протягування — це кінець жесту, а не намір зумити.
+		if (moved) return;
+		if (zoomed) resetZoom();
+		else zoomTo(event.clientX, event.clientY);
 	}
 </script>
 
@@ -111,31 +163,49 @@
 <DialogPrimitive.Root bind:open>
 	<DialogPrimitive.Portal>
 		<DialogPrimitive.Overlay
-			class="fixed inset-0 z-50 bg-background/90 backdrop-blur-xl data-closed:animate-out data-closed:fade-out-0 data-open:animate-in data-open:fade-in-0"
+			class="fixed inset-0 z-50 bg-background/90 backdrop-blur-xl data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0"
 		/>
 
 		<DialogPrimitive.Content
-			class="fixed inset-0 z-50 flex flex-col outline-none data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-98 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-98"
+			class="fixed inset-0 z-50 flex flex-col outline-none data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0"
 		>
 			<DialogPrimitive.Title class="sr-only">{name} — фото на весь екран</DialogPrimitive.Title>
 			<DialogPrimitive.Description class="sr-only">
-				Гортайте стрілками або свайпом, клік по фото збільшує його.
+				Гортайте стрілками або свайпом. Клік по фото збільшує його, збільшене можна тягнути.
 			</DialogPrimitive.Description>
 
-			<header class="flex items-center justify-between px-4 py-4 sm:px-6">
-				<span class="text-xs tracking-[0.2em] text-muted-foreground tabular-nums uppercase">
+			<header class="flex items-center justify-between gap-4 px-4 py-4 sm:px-6">
+				<span class="text-xs tracking-[0.2em] text-muted-foreground uppercase tabular-nums">
 					{#if many}{index + 1} / {images.length}{:else}{name}{/if}
 				</span>
 
-				<DialogPrimitive.Close
-					class="flex size-10 cursor-pointer items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-					aria-label="Закрити"
-				>
-					<XIcon class="size-5" />
-				</DialogPrimitive.Close>
+				<div class="flex items-center gap-1">
+					<button
+						type="button"
+						onclick={() => (zoomed ? resetZoom() : zoomTo())}
+						aria-label={zoomed ? 'Зменшити' : 'Збільшити'}
+						class="flex size-10 cursor-pointer items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+					>
+						{#if zoomed}
+							<ZoomOutIcon class="size-5" />
+						{:else}
+							<ZoomInIcon class="size-5" />
+						{/if}
+					</button>
+
+					<DialogPrimitive.Close
+						class="flex size-10 cursor-pointer items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+						aria-label="Закрити"
+					>
+						<XIcon class="size-5" />
+					</DialogPrimitive.Close>
+				</div>
 			</header>
 
-			<div class="relative flex min-h-0 flex-1 items-center justify-center px-4 pb-2 sm:px-16">
+			<div
+				bind:this={areaEl}
+				class="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden px-4 pb-2 sm:px-16"
+			>
 				<!-- Клік повз фото закриває: у лайтбоксі це очікувана поведінка -->
 				<button
 					type="button"
@@ -149,29 +219,37 @@
 				{/if}
 
 				{#if current}
+					<!-- Фото — прямий нащадок flex-контейнера: тільки так max-h-full
+					     тримає його в межах екрана, не розтягуючи. Жести миші й пальця
+					     живуть тут, а з клавіатури зум доступний кнопкою в шапці. -->
+					<!-- svelte-ignore a11y_click_events_have_key_events -->
+					<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 					<img
+						bind:this={imageEl}
 						src={current.url}
 						alt={current.alt || name}
 						draggable="false"
 						onload={() => (loading = false)}
-						onclick={toggleZoom}
+						onclick={onphotoclick}
 						onpointerdown={pointerdown}
 						onpointermove={pointermove}
 						onpointerup={pointerup}
 						onpointercancel={pointerup}
-						style="transform: translate3d({dragX}px, 0, 0) scale({zoomed
-							? ZOOM_SCALE
-							: 1}); transform-origin: {origin};"
+						style="transform: translate3d({zoomed ? panX : swipeX}px, {zoomed
+							? panY
+							: 0}px, 0) scale({zoomed ? ZOOM_SCALE : 1});"
 						class={cn(
-							'relative max-h-full max-w-full touch-pan-y rounded-xl object-contain select-none',
-							zoomed ? 'cursor-zoom-out' : 'cursor-zoom-in',
+							'relative max-h-full max-w-full rounded-xl object-contain select-none',
+							zoomed ? 'touch-none' : 'touch-pan-y',
+							zoomed ? (dragging ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-zoom-in',
 							loading && 'opacity-0',
-							!dragging && 'transition-transform duration-300 ease-out motion-reduce:transition-none'
+							!dragging &&
+								'transition-transform duration-300 ease-out motion-reduce:transition-none'
 						)}
 					/>
 				{/if}
 
-				{#if many}
+				{#if many && !zoomed}
 					<button
 						type="button"
 						onclick={() => go(-1)}
@@ -196,7 +274,7 @@
 					{#each images as image, position (image.url)}
 						<button
 							type="button"
-							onclick={() => show(position)}
+							onclick={() => (index = position)}
 							aria-label="Фото {position + 1}"
 							aria-current={position === index}
 							class={cn(

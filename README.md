@@ -35,6 +35,7 @@ npm run dev
 | -------------------- | --------------------------------- |
 | `npm run dev`        | Дев-сервер                        |
 | `npm run build`      | Прод-сборка                       |
+| `npm test`           | Тесты (Vitest)                    |
 | `npm run check`      | Проверка типов (`svelte-check`)   |
 | `npm run lint`       | Prettier + ESLint                 |
 | `npm run format`     | Форматирование                    |

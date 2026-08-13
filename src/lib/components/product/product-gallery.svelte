@@ -21,14 +21,18 @@
 	// скелетон блимав би вдруге.
 	const shown = $state<Record<string, boolean>>({});
 
-	let mainImage = $state<HTMLImageElement | null>(null);
+	let track = $state<HTMLElement | null>(null);
+	let dragX = $state(0);
 	let dragging = $state(false);
 	let startX = 0;
 	let moved = false;
 
-	// Фото з кешу встигає завантажитись до гідратації — onload уже не буде.
+	// Фото з кешу встигають завантажитись до гідратації — onload уже не буде.
 	$effect(() => {
-		if (active && mainImage?.complete) shown[active.url] = true;
+		if (!track) return;
+		for (const image of track.querySelectorAll('img')) {
+			if (image.complete) shown[image.src] = true;
+		}
 	});
 
 	function go(delta: number) {
@@ -46,19 +50,20 @@
 
 	function pointermove(event: PointerEvent) {
 		if (!dragging) return;
-		if (Math.abs(event.clientX - startX) > 8) moved = true;
+		dragX = event.clientX - startX;
+		if (Math.abs(dragX) > 8) moved = true;
 	}
 
-	function pointerup(event: PointerEvent) {
+	function pointerup() {
 		if (!dragging) return;
 		dragging = false;
 
-		const distance = event.clientX - startX;
-		if (Math.abs(distance) > SWIPE_THRESHOLD) go(distance < 0 ? 1 : -1);
+		if (Math.abs(dragX) > SWIPE_THRESHOLD) go(dragX < 0 ? 1 : -1);
+		dragX = 0;
 	}
 </script>
 
-<div class="flex flex-col-reverse gap-3 sm:flex-row sm:gap-4">
+<div class="flex flex-col-reverse gap-3 sm:flex-row sm:gap-3">
 	{#if many}
 		<div class="flex gap-2 overflow-x-auto sm:flex-col sm:overflow-visible">
 			{#each images as image, position (image.url)}
@@ -68,10 +73,8 @@
 					aria-label="Фото {position + 1}"
 					aria-current={position === index}
 					class={cn(
-						'aspect-3/4 w-16 shrink-0 cursor-pointer overflow-hidden rounded-xl bg-muted transition-all',
-						position === index
-							? 'ring-2 ring-foreground ring-offset-2 ring-offset-background'
-							: 'opacity-60 hover:opacity-100'
+						'aspect-466/582 w-16 shrink-0 cursor-pointer overflow-hidden bg-muted transition-opacity sm:w-20',
+						position === index ? 'ring-1 ring-foreground' : 'opacity-60 hover:opacity-100'
 					)}
 				>
 					<img src={image.url} alt="" class="size-full object-cover" loading="lazy" />
@@ -80,10 +83,34 @@
 		</div>
 	{/if}
 
-	<div class="group relative aspect-3/4 flex-1 overflow-hidden rounded-2xl bg-muted">
+	<!-- Розмір під макет: на десктопі фіксовані 466×582, нижче — та сама пропорція -->
+	<div
+		class="group relative aspect-466/582 w-full overflow-hidden bg-muted lg:h-[582px] lg:w-[466px] lg:flex-none"
+	>
 		{#if active && !shown[active.url]}
-			<Skeleton class="absolute inset-0 size-full rounded-2xl" />
+			<Skeleton class="absolute inset-0 size-full rounded-none" />
 		{/if}
+
+		<!-- Стрічка кадрів: перемикання — це зсув, а не підміна картинки -->
+		<div
+			bind:this={track}
+			class={cn(
+				'flex h-full w-full',
+				!dragging && 'transition-transform duration-500 ease-out motion-reduce:transition-none'
+			)}
+			style="transform: translate3d(calc({-index * 100}% + {dragX}px), 0, 0)"
+		>
+			{#each images as image (image.url)}
+				<img
+					src={image.url}
+					alt={image.alt || name}
+					draggable="false"
+					loading={image.url === images[0]?.url ? 'eager' : 'lazy'}
+					onload={() => (shown[image.url] = true)}
+					class="size-full shrink-0 object-cover select-none"
+				/>
+			{/each}
+		</div>
 
 		<button
 			type="button"
@@ -97,21 +124,7 @@
 			onpointercancel={() => (dragging = false)}
 			aria-label="Відкрити фото на весь екран"
 			class="absolute inset-0 cursor-zoom-in touch-pan-y"
-		>
-			{#if active}
-				<img
-					bind:this={mainImage}
-					src={active.url}
-					alt={active.alt || name}
-					draggable="false"
-					onload={() => (shown[active.url] = true)}
-					class={cn(
-						'size-full object-cover transition-all duration-500 ease-out select-none',
-						shown[active.url] ? 'opacity-100' : 'opacity-0'
-					)}
-				/>
-			{/if}
-		</button>
+		></button>
 
 		{#if many}
 			<button
