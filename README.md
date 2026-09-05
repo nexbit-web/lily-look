@@ -174,6 +174,8 @@ npm start             # = node build, слушает $PORT
 
 Переменные окружения площадки: `DATABASE_URL` (pooled), `DIRECT_URL` (direct, для миграций), `PUBLIC_SITE_URL`, при необходимости `NOVA_POSHTA_API_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`. Читаются в рантайме (`$env/dynamic/private`), пересборка при их смене не нужна.
 
+Конфигурация SvelteKit — в `svelte.config.js` (адаптер, `out: 'build'`). Держать её там, а не инлайном в `vite.config.ts`, важно по двум причинам: инлайн-объект в `sveltekit({...})` полностью заменяет этот файл, и сборщики хостингов (Hostinger в их числе) ищут папку сборки именно через него.
+
 **Порядок в `build` важен.** `prisma generate` читает корневой `tsconfig.json`, а тот наследует `./.svelte-kit/tsconfig.json` — файл, которого на свежем клоне ещё нет. Поэтому первым идёт `svelte-kit sync`; если поменять порядок местами, сборка на хостинге упадёт с `Could not resolve '../../../prisma/generated/client.js'`.
 
 **Edge-рантайм.** Сейчас используется `@prisma/adapter-pg` поверх TCP — это работает в Node-рантайме (Vercel Functions, Netlify, Node-сервер). Если понадобится edge, замени адаптер на `@prisma/adapter-neon` (WebSocket) в `src/lib/server/db.ts` — это изменение в одном файле.
