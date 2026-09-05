@@ -34,7 +34,8 @@ npm run dev
 | Команда              | Что делает                        |
 | -------------------- | --------------------------------- |
 | `npm run dev`        | Дев-сервер                        |
-| `npm run build`      | Прод-сборка                       |
+| `npm run build`      | Прод-сборка (sync + generate)     |
+| `npm start`          | Запуск собранного сервера         |
 | `npm test`           | Тесты (Vitest)                    |
 | `npm run check`      | Проверка типов (`svelte-check`)   |
 | `npm run lint`       | Prettier + ESLint                 |
@@ -162,13 +163,18 @@ npx shadcn-svelte@latest add dialog
 
 ## Деплой
 
-Проект собран с `@sveltejs/adapter-auto` — он сам подхватит Vercel, Netlify или Cloudflare. Для фиксированной платформы поставь конкретный адаптер:
+Собирается через `@sveltejs/adapter-node` — на выходе обычный Node-сервер в `./build`. Он подходит и Hostinger, и любому VPS, и Vercel/Netlify (там достаточно указать команду запуска).
 
 ```bash
-npx sv add sveltekit-adapter=adapter:vercel
+npm ci
+npm run db:deploy     # применить миграции (нужен DIRECT_URL)
+npm run build         # svelte-kit sync → prisma generate → vite build
+npm start             # = node build, слушает $PORT
 ```
 
-В переменные окружения площадки добавь `DATABASE_URL` и `DIRECT_URL`. В CI перед сборкой — `npm run db:deploy`.
+Переменные окружения площадки: `DATABASE_URL` (pooled), `DIRECT_URL` (direct, для миграций), `PUBLIC_SITE_URL`, при необходимости `NOVA_POSHTA_API_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`. Читаются в рантайме (`$env/dynamic/private`), пересборка при их смене не нужна.
+
+**Порядок в `build` важен.** `prisma generate` читает корневой `tsconfig.json`, а тот наследует `./.svelte-kit/tsconfig.json` — файл, которого на свежем клоне ещё нет. Поэтому первым идёт `svelte-kit sync`; если поменять порядок местами, сборка на хостинге упадёт с `Could not resolve '../../../prisma/generated/client.js'`.
 
 **Edge-рантайм.** Сейчас используется `@prisma/adapter-pg` поверх TCP — это работает в Node-рантайме (Vercel Functions, Netlify, Node-сервер). Если понадобится edge, замени адаптер на `@prisma/adapter-neon` (WebSocket) в `src/lib/server/db.ts` — это изменение в одном файле.
 

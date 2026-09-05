@@ -1,5 +1,5 @@
 import { svelteTesting } from '@testing-library/svelte/vite';
-import adapter from '@sveltejs/adapter-auto';
+import adapter from '@sveltejs/adapter-node';
 import { sveltekit } from '@sveltejs/kit/vite';
 import tailwindcss from '@tailwindcss/vite';
 // defineConfig саме з vitest/config — інакше поле `test` не типізоване.
@@ -15,9 +15,10 @@ export default defineConfig({
 					filename.split(/[/\\]/).includes('node_modules') ? undefined : true
 			},
 
-			// adapter-auto only supports some environments, see https://svelte.dev/docs/kit/adapter-auto for a list.
-			// If your environment is not supported, or you settled on a specific environment, switch out the adapter.
-			// See https://svelte.dev/docs/kit/adapters for more information about adapters.
+			// adapter-node: збірка стає звичайним Node-сервером у ./build,
+			// який запускається `node build` (npm start) і слухає $PORT.
+			// Саме це вміє хостинг Hostinger; adapter-auto там не вгадує
+			// середовище і валить збірку.
 			adapter: adapter()
 		})
 	],
