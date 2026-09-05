@@ -6,7 +6,7 @@
 	"scripts": {
 		"dev": "vite dev",
 		"build": "svelte-kit sync && prisma generate && vite build",
-		"start": "node build",
+		"start": "node dist",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync && prisma generate || echo ''",
 		"test": "vitest run",

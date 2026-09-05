@@ -17,9 +17,12 @@ export default {
 	},
 
 	kit: {
-		// adapter-node: збірка стає звичайним Node-сервером у ./build,
-		// який запускається `node build` (npm start) і слухає $PORT.
-		// Теку вказано явно — саме на неї налаштований деплой хостингу.
-		adapter: adapter({ out: 'build' })
+		// adapter-node: збірка стає звичайним Node-сервером, який
+		// запускається `node dist` (npm start) і слухає $PORT.
+		//
+		// Тека саме `dist`, а не типова для SvelteKit `build`: деплой
+		// Hostinger шукає результат складання за цією назвою і без неї
+		// відповідає «No output directory found after build».
+		adapter: adapter({ out: 'dist' })
 	}
 };

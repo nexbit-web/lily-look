@@ -169,12 +169,14 @@ npx shadcn-svelte@latest add dialog
 npm ci
 npm run db:deploy     # применить миграции (нужен DIRECT_URL)
 npm run build         # svelte-kit sync → prisma generate → vite build
-npm start             # = node build, слушает $PORT
+npm start             # = node dist, слушает $PORT
 ```
+
+Готовый сервер кладётся в `dist/` (`adapter.out` в `svelte.config.js`). Имя не случайное: деплой Hostinger ищет результат сборки именно под этим названием, а на `build` отвечает `No output directory found after build`. На другой площадке имя можно поменять в одном месте — в `svelte.config.js` и в скрипте `start`.
 
 Переменные окружения площадки: `DATABASE_URL` (pooled), `DIRECT_URL` (direct, для миграций), `PUBLIC_SITE_URL`, при необходимости `NOVA_POSHTA_API_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`. Читаются в рантайме (`$env/dynamic/private`), пересборка при их смене не нужна.
 
-Конфигурация SvelteKit — в `svelte.config.js` (адаптер, `out: 'build'`). Держать её там, а не инлайном в `vite.config.ts`, важно по двум причинам: инлайн-объект в `sveltekit({...})` полностью заменяет этот файл, и сборщики хостингов (Hostinger в их числе) ищут папку сборки именно через него.
+Конфигурация SvelteKit — в `svelte.config.js` (адаптер, `out: 'dist'`). Держать её там, а не инлайном в `vite.config.ts`, важно по двум причинам: инлайн-объект в `sveltekit({...})` полностью заменяет этот файл, и сборщики хостингов (Hostinger в их числе) ищут папку сборки именно через него.
 
 **Порядок в `build` важен.** `prisma generate` читает корневой `tsconfig.json`, а тот наследует `./.svelte-kit/tsconfig.json` — файл, которого на свежем клоне ещё нет. Поэтому первым идёт `svelte-kit sync`; если поменять порядок местами, сборка на хостинге упадёт с `Could not resolve '../../../prisma/generated/client.js'`.
 
