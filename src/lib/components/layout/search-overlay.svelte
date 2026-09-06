@@ -36,9 +36,14 @@
 		requestAnimationFrame(() => input?.focus());
 	});
 
-	// Закриваємо панель після будь-якої навігації.
+	// Закриваємо панель після будь-якої навігації. Перший прогін ефекту
+	// пропускаємо: компонент монтується вже відкритим (його підвантажують
+	// у момент кліку), і без цієї перевірки він гасив би сам себе одразу.
+	let lastUrl = page.url.href;
 	$effect(() => {
-		void page.url.href;
+		const href = page.url.href;
+		if (href === lastUrl) return;
+		lastUrl = href;
 		open = false;
 	});
 

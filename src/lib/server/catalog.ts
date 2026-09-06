@@ -257,6 +257,27 @@ export async function listFacets(categorySlug?: string): Promise<CatalogFacets> 
  * відкривається, але без варіантів: сторінка лишається за старим посиланням,
  * а купити нічого не можна. Так не ламаються збережені посилання й видача.
  */
+/**
+ * Усе, що має потрапити в sitemap.xml: сторінки товарів і категорій.
+ * Дата зміни береться з БД — Google бачить, що оновилось, і перезаходить.
+ */
+export async function listSitemapEntries() {
+	const [products, categories] = await Promise.all([
+		db.product.findMany({
+			where: VISIBLE_PRODUCT,
+			select: { slug: true, updatedAt: true },
+			orderBy: { updatedAt: 'desc' }
+		}),
+		db.category.findMany({
+			where: { products: { some: VISIBLE_PRODUCT } },
+			select: { slug: true, updatedAt: true },
+			orderBy: [{ position: 'asc' }, { name: 'asc' }]
+		})
+	]);
+
+	return { products, categories };
+}
+
 export async function getProduct(slug: string): Promise<ProductDetail | null> {
 	const row = await db.product.findFirst({
 		where: { slug, isActive: true },
@@ -273,6 +294,7 @@ export async function getProduct(slug: string): Promise<ProductDetail | null> {
 				where: AVAILABLE_VARIANT,
 				select: {
 					id: true,
+					sku: true,
 					size: true,
 					color: true,
 					colorHex: true,
@@ -297,6 +319,7 @@ export async function getProduct(slug: string): Promise<ProductDetail | null> {
 		images: row.images.map((image) => ({ url: image.url, alt: image.alt ?? row.name })),
 		variants: row.variants.map((variant) => ({
 			id: variant.id,
+			sku: variant.sku,
 			size: variant.size,
 			color: variant.color,
 			colorHex: variant.colorHex,

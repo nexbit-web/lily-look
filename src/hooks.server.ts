@@ -1,4 +1,5 @@
 import { isDatabaseConfigured } from '$lib/server/db';
+import { serializeJsonLd, storeNode, websiteNode } from '$lib/server/seo';
 import { redirect, type Handle } from '@sveltejs/kit';
 
 /**
@@ -15,5 +16,22 @@ export const handle: Handle = async ({ event, resolve }) => {
 		redirect(307, '/');
 	}
 
-	return resolve(event);
+	/**
+	 * Розмітка Schema.org вставляється тут, а не в шаблоні сторінки.
+	 *
+	 * Svelte не дає покласти <script> у svelte:head без {@html}, а це діра
+	 * під XSS. Тому сторінки лише складають вузли графа в locals, а сюди
+	 * приходить готовий, екранований JSON — рівно один тег на документ.
+	 * Магазин і сайт описані на кожній сторінці; решту додають самі сторінки.
+	 */
+	return resolve(event, {
+		transformPageChunk: ({ html }) => {
+			if (!html.includes('%lily.jsonld%')) return html;
+
+			const origin = event.url.origin;
+			const nodes = [storeNode(origin), websiteNode(origin), ...(event.locals.jsonLd ?? [])];
+
+			return html.replace('%lily.jsonld%', serializeJsonLd(nodes));
+		}
+	});
 };

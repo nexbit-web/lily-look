@@ -3,10 +3,10 @@
 	import CatalogFilters from '$lib/components/catalog/catalog-filters.svelte';
 	import CatalogSort from '$lib/components/catalog/catalog-sort.svelte';
 	import CategoryGrid from '$lib/components/catalog/category-grid.svelte';
+	import PageMeta from '$lib/components/layout/page-meta.svelte';
 	import ProductGrid from '$lib/components/product/product-grid.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as Sheet from '$lib/components/ui/sheet';
-	import { SITE } from '$lib/config';
 	import { plural } from '$lib/plural';
 	import ChevronLeftIcon from '@lucide/svelte/icons/chevron-left';
 	import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
@@ -37,21 +37,27 @@
 	}
 </script>
 
-<svelte:head>
-	<title>{title} — {SITE.name}</title>
-</svelte:head>
+<PageMeta
+	title={data.seo.title}
+	description={data.seo.description}
+	canonical={data.seo.canonical}
+	index={data.seo.index}
+/>
 
 <div class="mx-auto max-w-6xl px-4 py-10">
-	<nav class="mb-6 flex items-center gap-2 text-sm text-muted-foreground">
-		<a href="/" class="hover:text-foreground">Головна</a>
-		<span>/</span>
-		{#if data.view === 'products' && data.category}
-			<a href="/catalog" class="hover:text-foreground">Каталог</a>
-			<span>/</span>
-			<span class="text-foreground">{data.category.name}</span>
-		{:else}
-			<span class="text-foreground">Каталог</span>
-		{/if}
+	<!-- Крихти — список: так їх читає скрінрідер і так їх очікує розмітка. -->
+	<nav aria-label="Хлібні крихти" class="mb-6 text-sm text-muted-foreground">
+		<ol class="flex flex-wrap items-center gap-2">
+			<li><a href="/" class="hover:text-foreground">Головна</a></li>
+			<li aria-hidden="true">/</li>
+			{#if data.view === 'products' && data.category}
+				<li><a href="/catalog" class="hover:text-foreground">Каталог</a></li>
+				<li aria-hidden="true">/</li>
+				<li class="text-foreground" aria-current="page">{data.category.name}</li>
+			{:else}
+				<li class="text-foreground" aria-current="page">Каталог</li>
+			{/if}
+		</ol>
 	</nav>
 
 	{#if data.view === 'categories'}

@@ -10,11 +10,11 @@
 		text: string;
 		cta: { label: string; href: string };
 		image: string | null;
-		/** Рожевий градієнт для промо, нейтральний — для іміджевих банерів. */
+		/** Рожевий акцент для промо, нейтральний — для іміджевих банерів. */
 		tone: 'brand' | 'neutral';
 	};
 
-	let { banners, interval = 6000 }: { banners: Banner[]; interval?: number } = $props();
+	let { banners, interval = 4500 }: { banners: Banner[]; interval?: number } = $props();
 
 	let index = $state(0);
 	let paused = $state(false);
@@ -35,7 +35,7 @@
 </script>
 
 <section
-	class="relative overflow-hidden rounded-3xl"
+	class="relative h-[80svh] max-h-[860px] min-h-[480px] overflow-hidden rounded-3xl bg-muted"
 	onmouseenter={() => (paused = true)}
 	onmouseleave={() => (paused = false)}
 	onfocusin={() => (paused = true)}
@@ -44,50 +44,70 @@
 	aria-label="Акції та новинки"
 >
 	{#each banners as banner, bannerIndex (banner.title)}
+		{@const active = bannerIndex === index}
 		<div
 			class={cn(
-				'transition-opacity duration-700 ease-out',
-				bannerIndex === index ? 'opacity-100' : 'pointer-events-none absolute inset-0 opacity-0'
+				'absolute inset-0 transition-opacity duration-700 ease-out motion-reduce:transition-none',
+				active ? 'opacity-100' : 'pointer-events-none opacity-0'
 			)}
-			aria-hidden={bannerIndex !== index}
+			aria-hidden={!active}
 		>
+			{#if banner.image}
+				<img
+					src={banner.image}
+					alt=""
+					loading={bannerIndex === 0 ? 'eager' : 'lazy'}
+					fetchpriority={bannerIndex === 0 ? 'high' : 'auto'}
+					class="size-full object-cover object-top"
+				/>
+			{/if}
+
+			<!--
+				Дві заслінки замість однієї: знизу — під текстовий блок, зліва —
+				під колонку з заголовком. Світле фото (біле полотно, пісок, льон)
+				інакше з'їдає білі літери, і банер читається як зіпсований.
+				Верх кадру лишається чистим — там сама річ.
+			-->
 			<div
-				class={cn(
-					'grid items-center gap-8 px-8 py-14 md:grid-cols-2 md:px-14 md:py-20',
-					banner.tone === 'brand' ? 'bg-brand-soft' : 'bg-muted'
-				)}
-			>
-				<div class="space-y-5">
-					<p class="text-xs tracking-[0.25em] text-muted-foreground uppercase">
+				class="absolute inset-0 bg-linear-to-t from-black/85 via-black/45 via-55% to-transparent"
+			></div>
+			<div
+				class="absolute inset-0 hidden bg-linear-to-r from-black/60 via-black/10 to-transparent md:block"
+			></div>
+
+			<div class="absolute inset-x-0 bottom-0 p-8 pb-24 md:p-14 md:pb-28">
+				<div class="max-w-xl space-y-4 text-white">
+					<p
+						class={cn(
+							'text-xs tracking-[0.25em] uppercase',
+							banner.tone === 'brand' ? 'text-brand' : 'text-white/75'
+						)}
+					>
 						{banner.eyebrow}
 					</p>
-					<h2 class="font-heading text-3xl leading-tight text-balance md:text-5xl">
+					<h2 class="font-heading text-4xl leading-[1.1] text-balance md:text-6xl">
 						{banner.title}
 					</h2>
-					<p class="max-w-sm text-pretty text-muted-foreground">{banner.text}</p>
-					<Button href={banner.cta.href} size="lg">{banner.cta.label}</Button>
+					<p class="max-w-md text-pretty text-white/80">{banner.text}</p>
+					<Button
+						href={banner.cta.href}
+						size="lg"
+						class="mt-2 bg-white text-black hover:bg-white/90"
+						tabindex={active ? 0 : -1}
+					>
+						{banner.cta.label}
+					</Button>
 				</div>
-
-				{#if banner.image}
-					<div class="aspect-4/3 overflow-hidden rounded-2xl md:aspect-square">
-						<img
-							src={banner.image}
-							alt=""
-							class="size-full object-cover"
-							loading={bannerIndex === 0 ? 'eager' : 'lazy'}
-						/>
-					</div>
-				{/if}
 			</div>
 		</div>
 	{/each}
 
 	{#if banners.length > 1}
-		<div class="absolute inset-x-0 bottom-5 flex items-center justify-center gap-3">
+		<div class="absolute inset-x-0 bottom-6 flex items-center justify-center gap-4 md:bottom-8">
 			<Button
 				variant="ghost"
 				size="icon"
-				class="size-8 rounded-full"
+				class="size-8 rounded-full text-white hover:bg-white/15 hover:text-white"
 				aria-label="Попередній банер"
 				onclick={() => go(index - 1)}
 			>
@@ -101,20 +121,31 @@
 						onclick={() => (index = dotIndex)}
 						aria-label="Банер {dotIndex + 1}"
 						aria-current={dotIndex === index}
-						class={cn(
-							'h-1.5 rounded-full transition-all duration-300',
-							dotIndex === index
-								? 'w-7 bg-foreground'
-								: 'w-1.5 bg-foreground/25 hover:bg-foreground/40'
-						)}
-					></button>
+						class="h-1 w-10 overflow-hidden rounded-full bg-white/30 transition-colors hover:bg-white/50"
+					>
+						{#if dotIndex === index}
+							<!--
+								Смужка заповнюється рівно за час показу слайда — видно,
+								що зараз щось перемкнеться, і скільки лишилось чекати.
+								key на index перезапускає анімацію на кожному слайді.
+							-->
+							{#key index}
+								<span
+									class="block h-full origin-left bg-white"
+									style="animation: hero-progress {interval}ms linear forwards; animation-play-state: {paused
+										? 'paused'
+										: 'running'}"
+								></span>
+							{/key}
+						{/if}
+					</button>
 				{/each}
 			</div>
 
 			<Button
 				variant="ghost"
 				size="icon"
-				class="size-8 rounded-full"
+				class="size-8 rounded-full text-white hover:bg-white/15 hover:text-white"
 				aria-label="Наступний банер"
 				onclick={() => go(index + 1)}
 			>

@@ -11,6 +11,7 @@ vi.mock('svelte-hot-french-toast', () => ({
 
 const variant = (patch: Partial<ProductDetail['variants'][number]>) => ({
 	id: 'v-s-pudra',
+	sku: 'OLIVIA-S-PUDRA',
 	size: 'S',
 	color: 'Пудровий',
 	colorHex: '#e8c9c9',

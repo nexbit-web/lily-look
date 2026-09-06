@@ -36,6 +36,8 @@ export type ProductCard = {
 
 export type ProductVariantView = {
 	id: string;
+	/** Артикул: іде в розмітку Schema.org як sku/mpn. */
+	sku: string;
 	size: string;
 	color: string;
 	colorHex: string | null;

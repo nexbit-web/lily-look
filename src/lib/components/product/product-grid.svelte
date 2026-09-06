@@ -13,10 +13,12 @@
 	const STAGGER_MS = 70;
 </script>
 
-<div class="grid grid-cols-2 gap-x-4 gap-y-10 sm:gap-x-5 lg:grid-cols-4">
+<!-- Сітка товарів — це список: пошуковик і скрінрідер бачать кількість
+     позицій і межі кожної картки, а не абстрактні блоки. -->
+<ul class="grid grid-cols-2 gap-x-4 gap-y-10 sm:gap-x-5 lg:grid-cols-4">
 	{#each products as product, index (product.id)}
-		<div use:reveal={{ delay: (index % 4) * STAGGER_MS }}>
+		<li use:reveal={{ delay: (index % 4) * STAGGER_MS }}>
 			<ProductCard {product} priority={index < 4} />
-		</div>
+		</li>
 	{/each}
-</div>
+</ul>
