@@ -1,4 +1,5 @@
-import { SITE, SORT_OPTIONS, type SortOption } from '$lib/config';
+import { RETURN_DAYS, SITE, SORT_OPTIONS, type SortOption } from '$lib/config';
+import { plural } from '$lib/plural';
 import { getCategory, listCategoryCards, listFacets, listProducts } from '$lib/server/catalog';
 import { breadcrumbsNode, itemListNode } from '$lib/server/seo';
 import { error } from '@sveltejs/kit';
@@ -53,7 +54,7 @@ function buildSeo(input: SeoInput) {
 	if (sale) {
 		return {
 			title: `Знижки на жіночий одяг${pageSuffix} — ${SITE.name}`,
-			description: `Розпродаж жіночого одягу: ${total} моделей за зниженою ціною. Доставка по Україні, обмін 14 днів.`,
+			description: `Розпродаж жіночого одягу: ${total} моделей за зниженою ціною. Доставка по Україні, обмін ${RETURN_DAYS} ${plural(RETURN_DAYS, 'день', 'дні', 'днів')}.`,
 			canonical: `${pathname}${suffix}`,
 			index: !filtered
 		};
@@ -62,7 +63,7 @@ function buildSeo(input: SeoInput) {
 	if (category) {
 		return {
 			title: `${category.name} — купити жіночий одяг в Україні${pageSuffix} | ${SITE.name}`,
-			description: `${category.name} від ${SITE.name}: ${total} моделей у наявності. Доставка Новою Поштою по всій Україні, обмін і повернення 14 днів.`,
+			description: `${category.name} від ${SITE.name}: ${total} моделей у наявності. Доставка Новою Поштою по всій Україні, обмін і повернення ${RETURN_DAYS} ${plural(RETURN_DAYS, 'день', 'дні', 'днів')}.`,
 			canonical: `${pathname}${suffix}`,
 			index: !filtered
 		};
@@ -108,8 +109,7 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 			categories,
 			seo: {
 				title: `Каталог жіночого одягу — ${SITE.name}`,
-				description:
-					'Категорії жіночого одягу LILY LOOK: сукні, костюми, верхній одяг, блузи, спідниці й трикотаж. Доставка Новою Поштою по Україні, обмін 14 днів.',
+				description: `Категорії жіночого одягу LILY LOOK: сукні, костюми, верхній одяг, блузи, спідниці й трикотаж. Доставка Новою Поштою по Україні, обмін ${RETURN_DAYS} ${plural(RETURN_DAYS, 'день', 'дні', 'днів')}.`,
 				canonical: '/catalog',
 				index: true
 			}

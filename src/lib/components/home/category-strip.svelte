@@ -10,8 +10,14 @@
 	категорій стоїть одразу під банером: коротка дорога до потрібної полиці.
 	На телефоні гортається вбік, щоб не з'їдати екран висотою.
 -->
-<div class="-mx-4 no-scrollbar overflow-x-auto px-4 sm:mx-0 sm:overflow-visible sm:px-0">
-	<ul class="flex gap-4 sm:grid sm:grid-cols-3 lg:grid-cols-6">
+<!--
+	Поля на телефоні лежать на самому списку, і йому потрібен `w-max`:
+	без нього список завширшки з екран, картки вилазять за його межі, і
+	праве поле опиняється лівіше за останню картку — вона впирається
+	в край екрана.
+-->
+<div class="-mx-4 no-scrollbar overflow-x-auto sm:mx-0 sm:overflow-visible">
+	<ul class="flex w-max gap-4 px-4 sm:grid sm:w-auto sm:grid-cols-3 sm:px-0 lg:grid-cols-6">
 		{#each categories as category, index (category.slug)}
 			<li class="w-32 shrink-0 sm:w-auto">
 				<a

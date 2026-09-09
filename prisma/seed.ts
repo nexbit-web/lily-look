@@ -77,7 +77,12 @@ type SeedProduct = {
 	images: string[];
 	sizes: string[];
 	colors: { name: string; hex: string }[];
+	/** Характеристики: порядок у списку — порядок у цьому масиві. */
+	attributes?: { name: string; value: string }[];
 };
+
+/** Те, що є в кожної речі незалежно від моделі. */
+const COMMON_ATTRIBUTES = [{ name: 'Країна виробництва', value: 'Україна' }];
 
 const PRODUCTS: SeedProduct[] = [
 	{
@@ -93,6 +98,11 @@ const PRODUCTS: SeedProduct[] = [
 		colors: [
 			{ name: 'Молочний', hex: '#EFE9E1' },
 			{ name: 'Чорний', hex: '#1C1917' }
+		],
+		attributes: [
+			{ name: 'Склад', value: '100% віскоза' },
+			{ name: 'Посадка', value: 'Приталена' },
+			{ name: 'Сезон', value: 'Демісезон' }
 		]
 	},
 	{
@@ -108,6 +118,11 @@ const PRODUCTS: SeedProduct[] = [
 		colors: [
 			{ name: 'Смарагдовий', hex: '#0F5132' },
 			{ name: 'Пудровий', hex: '#E4C4C0' }
+		],
+		attributes: [
+			{ name: 'Склад', value: '95% поліестер, 5% еластан' },
+			{ name: 'Посадка', value: 'Приталена' },
+			{ name: 'Сезон', value: 'Всесезон' }
 		]
 	},
 	{
@@ -367,6 +382,11 @@ async function main() {
 				price: product.price,
 				isFeatured: product.featured ?? false,
 				categoryId: id,
+				attributes: {
+					create: [...(product.attributes ?? []), ...COMMON_ATTRIBUTES].map(
+						(attribute, position) => ({ ...attribute, position })
+					)
+				},
 				images: {
 					create: product.images.map((imageId, position) => ({
 						url: photo(imageId),

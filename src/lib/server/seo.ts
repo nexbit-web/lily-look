@@ -1,4 +1,4 @@
-import { deliveryMethod, FREE_DELIVERY_FROM, SENDER, SITE } from '$lib/config';
+import { deliveryMethod, FREE_DELIVERY_FROM, RETURN_DAYS, SENDER, SITE } from '$lib/config';
 import type { ProductCard, ProductDetail } from '$lib/types';
 
 /**
@@ -128,7 +128,7 @@ function offerTerms(origin: string) {
 			'@type': 'MerchantReturnPolicy',
 			applicableCountry: 'UA',
 			returnPolicyCategory: 'https://schema.org/MerchantReturnFiniteReturnWindow',
-			merchantReturnDays: 14,
+			merchantReturnDays: RETURN_DAYS,
 			returnMethod: 'https://schema.org/ReturnByMail'
 		},
 		seller: { '@id': storeId(origin) }
@@ -154,6 +154,29 @@ function offerNode(origin: string, url: string, price: number, inStock: boolean)
  * так Google розуміє, що це одна річ у різних розмірах і кольорах, а не
  * купа дублів. У кожного варіанта свій артикул і своя наявність.
  */
+/**
+ * Характеристики CRM веде вільним списком, а Google розуміє лише кілька
+ * власних полів. Витягуємо ті, які він справді читає: склад тканини й
+ * країну виробництва. Назви шукаємо без урахування регістра — у CRM
+ * пишуть і «Склад», і «склад».
+ */
+const SCHEMA_ATTRIBUTES: Record<string, string[]> = {
+	material: ['склад', 'матеріал', 'тканина'],
+	countryOfOrigin: ['країна виробництва', 'країна', 'виробництво'],
+	pattern: ['візерунок', 'принт']
+};
+
+function schemaAttributes(product: ProductDetail): Record<string, string> {
+	const found: Record<string, string> = {};
+
+	for (const [field, names] of Object.entries(SCHEMA_ATTRIBUTES)) {
+		const attribute = product.attributes.find((item) => names.includes(item.name.toLowerCase()));
+		if (attribute) found[field] = attribute.value;
+	}
+
+	return found;
+}
+
 export function productNode(origin: string, product: ProductDetail): JsonLdNode {
 	const url = absolute(origin, `/product/${product.slug}`);
 	const images = product.images.map((image) => absolute(origin, image.url));
@@ -165,6 +188,7 @@ export function productNode(origin: string, product: ProductDetail): JsonLdNode 
 		image: images,
 		brand,
 		category: product.category.name,
+		...schemaAttributes(product),
 		url
 	};
 

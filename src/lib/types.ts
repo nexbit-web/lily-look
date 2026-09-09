@@ -45,6 +45,12 @@ export type ProductVariantView = {
 	stock: number;
 };
 
+/** Характеристика товару — рядок таблиці «Склад / Країна / Догляд». */
+export type ProductAttributeView = {
+	name: string;
+	value: string;
+};
+
 export type ProductDetail = {
 	id: string;
 	slug: string;
@@ -55,6 +61,23 @@ export type ProductDetail = {
 	category: { slug: string; name: string };
 	images: { url: string; alt: string }[];
 	variants: ProductVariantView[];
+	/** Тільки заповнені: чого CRM не вказала, того на сторінці немає. */
+	attributes: ProductAttributeView[];
+};
+
+/**
+ * Спосіб доставки з порахованою датою отримання.
+ * Дату рахує сервер (`$lib/delivery-estimate`), щоб вона не залежала
+ * від годинника в браузері й не мінялась після гідратації.
+ */
+export type DeliveryOption = {
+	value: string;
+	label: string;
+	/** Копійки. */
+	cost: number;
+	shipsToday: boolean;
+	/** «10–12 вересня». */
+	eta: string;
 };
 
 export type CatalogFacets = {

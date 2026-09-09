@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button';
 	import { Progress } from '$lib/components/ui/progress';
-	import { FREE_DELIVERY_FROM } from '$lib/config';
+	import { FREE_DELIVERY_FROM, RETURN_DAYS } from '$lib/config';
 	import { formatPrice } from '$lib/money';
 	import { plural } from '$lib/plural';
 	import ArrowRightIcon from '@lucide/svelte/icons/arrow-right';
@@ -58,7 +58,8 @@
 		</Button>
 
 		<p class="mt-4 text-center text-[0.7rem] tracking-[0.12em] text-muted-foreground uppercase">
-			Оплата при отриманні · Обмін 14 днів
+			Оплата при отриманні · Обмін {RETURN_DAYS}
+			{plural(RETURN_DAYS, 'день', 'дні', 'днів')}
 		</p>
 	</div>
 </aside>

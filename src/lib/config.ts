@@ -30,8 +30,20 @@ export const SIZE_ORDER = ['XS', 'S', 'M', 'L', 'XL', 'XXL'] as const;
 
 export const PRODUCTS_PER_PAGE = 12;
 
+/**
+ * Стеля кількості однієї позиції — захист від підробленої форми.
+ * Реальний ліміт усе одно залишок на складі.
+ */
+export const MAX_CART_QUANTITY = 99;
+
+/**
+ * Скільки днів на обмін і повернення. Число живе тут одне: воно йде і в
+ * тексти на сайті, і в розмітку товару для Google — розійтись вони не мають.
+ */
+export const RETURN_DAYS = 14;
+
 /** Безкоштовна доставка від цієї суми (у копійках). */
-export const FREE_DELIVERY_FROM = 200_000;
+export const FREE_DELIVERY_FROM = 300_000;
 
 /**
  * Сортування каталогу.
@@ -53,11 +65,13 @@ export type SortOption = (typeof SORT_OPTIONS)[number]['value'];
  *
  * `carrier` вмикає автодоповнення міста й відділення з API перевізника,
  * `kind` визначає, які поля показати: відділення зі списку, вулицю вручну
- * чи нічого (самовивіз).
+ * чи нічого (самовивіз). `days` — [мінімум, максимум] днів у дорозі після
+ * відправки; з них сторінка товару рахує конкретну дату отримання.
  */
 export const DELIVERY_METHODS = [
 	{
 		value: 'NOVA_POSHTA_BRANCH',
+		days: [1, 3] as readonly [number, number],
 		label: 'Нова Пошта — відділення',
 		hint: 'Доставка 1–3 дні',
 		cost: 9000,
@@ -66,6 +80,7 @@ export const DELIVERY_METHODS = [
 	},
 	{
 		value: 'NOVA_POSHTA_COURIER',
+		days: [1, 3] as readonly [number, number],
 		label: 'Нова Пошта — кур’єр',
 		hint: 'Доставка за адресою, 1–3 дні',
 		cost: 14000,
@@ -75,6 +90,7 @@ export const DELIVERY_METHODS = [
 	{
 		// Довідник Укрпошти не підключений — адреса вводиться вручну.
 		value: 'UKRPOSHTA_BRANCH',
+		days: [2, 5] as readonly [number, number],
 		label: 'Укрпошта — відділення',
 		hint: 'Доставка 2–5 днів, дешевше',
 		cost: 6000,
@@ -83,6 +99,7 @@ export const DELIVERY_METHODS = [
 	},
 	{
 		value: 'PICKUP',
+		days: [0, 0] as readonly [number, number],
 		label: 'Самовивіз із шоуруму',
 		hint: SENDER.pickupAddress,
 		cost: 0,
@@ -113,8 +130,6 @@ export type SizeChartRow = {
 	chest: number;
 	sleeve: number;
 	length: number;
-	/** Що реально вміститься під низ без тиску в плечах. */
-	underneath: string;
 };
 
 export type SizeChart = {
@@ -125,52 +140,48 @@ export type SizeChart = {
 
 const OUTERWEAR_CHART: SizeChart = {
 	title: 'Заміри куртки, см',
-	note: 'Заміри самої куртки в застебнутому вигляді. Остання колонка — що реально вміститься під низ без тиску в плечах.',
+	note: 'Заміри самої куртки в застебнутому вигляді, у сантиметрах.',
 	rows: [
 		{
 			size: 'XS',
 			ua: '40–42',
 			chest: 96,
 			sleeve: 60,
-			length: 92,
-			underneath: 'футболка й тонкий світшот'
+			length: 92
 		},
 		{
 			size: 'S',
 			ua: '44',
 			chest: 100,
 			sleeve: 61,
-			length: 94,
-			underneath: 'светр середньої в’язки'
+			length: 94
 		},
-		{ size: 'M', ua: '46', chest: 104, sleeve: 62, length: 96, underneath: 'светр або тонке худі' },
-		{ size: 'L', ua: '48', chest: 109, sleeve: 63, length: 98, underneath: 'щільний светр і худі' },
+		{ size: 'M', ua: '46', chest: 104, sleeve: 62, length: 96 },
+		{ size: 'L', ua: '48', chest: 109, sleeve: 63, length: 98 },
 		{
 			size: 'XL',
 			ua: '50–52',
 			chest: 114,
 			sleeve: 64,
-			length: 100,
-			underneath: 'щільний светр і флісова кофта'
+			length: 100
 		}
 	]
 };
 
 const DEFAULT_CHART: SizeChart = {
 	title: 'Заміри виробу, см',
-	note: 'Заміри самої речі в розкладеному вигляді. Остання колонка — з чим річ найкраще носиться.',
+	note: 'Заміри самої речі в розкладеному вигляді, у сантиметрах.',
 	rows: [
-		{ size: 'XS', ua: '40–42', chest: 84, sleeve: 58, length: 88, underneath: 'базовий топ' },
-		{ size: 'S', ua: '44', chest: 88, sleeve: 59, length: 90, underneath: 'тонкий гольф' },
-		{ size: 'M', ua: '46', chest: 92, sleeve: 60, length: 92, underneath: 'футболка або гольф' },
-		{ size: 'L', ua: '48', chest: 97, sleeve: 61, length: 94, underneath: 'тонкий светр' },
+		{ size: 'XS', ua: '40–42', chest: 84, sleeve: 58, length: 88 },
+		{ size: 'S', ua: '44', chest: 88, sleeve: 59, length: 90 },
+		{ size: 'M', ua: '46', chest: 92, sleeve: 60, length: 92 },
+		{ size: 'L', ua: '48', chest: 97, sleeve: 61, length: 94 },
 		{
 			size: 'XL',
 			ua: '50–52',
 			chest: 102,
 			sleeve: 62,
-			length: 96,
-			underneath: 'светр середньої в’язки'
+			length: 96
 		}
 	]
 };
@@ -181,24 +192,22 @@ const SIZE_CHARTS: Record<string, SizeChart> = {
 		title: 'Заміри трикотажу, см',
 		note: 'Трикотаж тягнеться — заміри наведені без розтягування. Якщо любите вільну посадку, беріть на розмір більше.',
 		rows: [
-			{ size: 'XS', ua: '40–42', chest: 88, sleeve: 59, length: 62, underneath: 'тонкий топ' },
-			{ size: 'S', ua: '44', chest: 92, sleeve: 60, length: 64, underneath: 'футболка' },
+			{ size: 'XS', ua: '40–42', chest: 88, sleeve: 59, length: 62 },
+			{ size: 'S', ua: '44', chest: 92, sleeve: 60, length: 64 },
 			{
 				size: 'M',
 				ua: '46',
 				chest: 96,
 				sleeve: 61,
-				length: 66,
-				underneath: 'футболка або сорочка'
+				length: 66
 			},
-			{ size: 'L', ua: '48', chest: 101, sleeve: 62, length: 68, underneath: 'сорочка' },
+			{ size: 'L', ua: '48', chest: 101, sleeve: 62, length: 68 },
 			{
 				size: 'XL',
 				ua: '50–52',
 				chest: 106,
 				sleeve: 63,
-				length: 70,
-				underneath: 'сорочка вільного крою'
+				length: 70
 			}
 		]
 	}

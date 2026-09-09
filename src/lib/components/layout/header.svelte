@@ -43,7 +43,7 @@
 <header class="sticky top-0 z-40 bg-background/85 backdrop-blur-md">
 	<div class="mx-auto flex h-16 max-w-6xl items-center gap-4 px-4">
 		<Button variant="ghost" size="icon" class="md:hidden" aria-label="Меню" onclick={openMenu}>
-			<MenuIcon />
+			<MenuIcon class="size-5" />
 		</Button>
 
 		<a href="/" class="font-heading text-xl tracking-[0.2em] uppercase">
@@ -71,11 +71,11 @@
 				стискає будь-яку іконку до 14px.
 			-->
 			<Button variant="ghost" size="icon" aria-label="Пошук" onclick={openSearch}>
-				<SearchIcon class="size-3" />
+				<SearchIcon class="size-5" />
 			</Button>
 
 			<Button href="/cart" variant="ghost" size="icon" class="relative" aria-label="Кошик">
-				<HandbagIcon class="size-3" />
+				<HandbagIcon class="size-5" />
 				{#if cartCount > 0}
 					<Badge
 						class="absolute -top-0.5 -right-0.5 size-4 justify-center rounded-full bg-brand p-0 text-[10px] text-brand-foreground tabular-nums"

@@ -11,7 +11,9 @@
 </script>
 
 <a href="/product/{product.slug}" class="group block">
-	<div class="relative aspect-4/5 overflow-hidden rounded-md bg-muted">
+	<!-- На телефоні кадр вищий: у дві колонки річ видно дрібно, і зайва
+	     висота працює краще за зайві піксели ширини. -->
+	<div class="relative aspect-3/4 overflow-hidden rounded-sm bg-muted sm:aspect-4/5">
 		{#if product.image}
 			<img
 				src={product.image.url}

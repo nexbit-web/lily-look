@@ -239,7 +239,7 @@
 							? panY
 							: 0}px, 0) scale({zoomed ? ZOOM_SCALE : 1});"
 						class={cn(
-							'relative max-h-full max-w-full rounded-xl object-contain select-none',
+							'relative max-h-full max-w-full object-contain select-none',
 							zoomed ? 'touch-none' : 'touch-pan-y',
 							zoomed ? (dragging ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-zoom-in',
 							loading && 'opacity-0',
@@ -278,7 +278,7 @@
 							aria-label="Фото {position + 1}"
 							aria-current={position === index}
 							class={cn(
-								'aspect-3/4 w-12 shrink-0 cursor-pointer overflow-hidden rounded-lg transition-opacity',
+								'aspect-3/4 w-12 shrink-0 cursor-pointer overflow-hidden transition-opacity',
 								position === index
 									? 'ring-2 ring-foreground ring-offset-2 ring-offset-background'
 									: 'opacity-50 hover:opacity-100'

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import * as Dialog from '$lib/components/ui/dialog';
-	import { SITE, sizeChartFor } from '$lib/config';
+	import { sizeChartFor } from '$lib/config';
 	import { cn } from '$lib/utils';
 	import RulerIcon from '@lucide/svelte/icons/ruler';
 
@@ -8,6 +8,18 @@
 		$props();
 
 	const chart = $derived(sizeChartFor(categorySlug));
+
+	/**
+	 * Заміри — це числа, і читаються вони колонками. Тому шапка тримається
+	 * зверху при прокрутці, а обраний розмір підсвічений: покупець звіряє
+	 * свій рядок, не гублячи, де він.
+	 */
+	const columns = [
+		{ key: 'ua', title: 'UA' },
+		{ key: 'chest', title: 'Груди' },
+		{ key: 'sleeve', title: 'Рукав' },
+		{ key: 'length', title: 'Довжина' }
+	] as const;
 </script>
 
 <Dialog.Root>
@@ -18,52 +30,48 @@
 		Таблиця розмірів
 	</Dialog.Trigger>
 
-	<Dialog.Content class="rounded-2xl sm:max-w-2xl">
-		<Dialog.Header>
-			<Dialog.Title class="font-heading text-xl">{chart.title}</Dialog.Title>
-			<Dialog.Description class="text-left">{chart.note}</Dialog.Description>
+	<Dialog.Content class="gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-lg">
+		<Dialog.Header class="border-b px-6 py-5">
+			<!-- Заголовок без засічок і без капсу: у вендореному компоненті
+			     вони прописані за замовчуванням, тут вони зайві. -->
+			<Dialog.Title class="font-sans text-lg font-medium tracking-tight normal-case">
+				{chart.title}
+			</Dialog.Title>
+			<Dialog.Description class="text-left text-xs">{chart.note}</Dialog.Description>
 		</Dialog.Header>
 
 		<!-- Таблиця ширша за модалку на мобільному — скролиться всередині себе -->
-		<div class="-mx-2 overflow-x-auto px-2">
-			<table class="w-full min-w-lg border-collapse text-sm">
-				<thead>
-					<tr class="border-b text-left text-muted-foreground">
-						<th class="py-3 pr-4 font-normal">Розмір</th>
-						<th class="py-3 pr-4 font-normal">UA</th>
-						<th class="py-3 pr-4 font-normal">Груди</th>
-						<th class="py-3 pr-4 font-normal">Рукав</th>
-						<th class="py-3 pr-4 font-normal">Довжина</th>
-						<th class="py-3 font-normal">Під низ</th>
+		<div class="max-h-[60vh] overflow-auto">
+			<table class="w-full border-collapse text-sm">
+				<thead class="sticky top-0 z-10 bg-background">
+					<tr class="text-left text-xs tracking-[0.08em] text-muted-foreground uppercase">
+						<th class="border-b py-3 pr-3 pl-6 font-normal">Розмір</th>
+						{#each columns as column (column.key)}
+							<th class="border-b py-3 pr-3 font-normal last:pr-6">{column.title}</th>
+						{/each}
 					</tr>
 				</thead>
 				<tbody>
 					{#each chart.rows as row (row.size)}
-						<tr
-							class={cn(
-								'border-b last:border-0',
-								// Обраний розмір підсвічуємо — легше звірити свої заміри
-								row.size === selectedSize && 'bg-brand-soft/60'
-							)}
-						>
-							<td class="py-3 pr-4 font-medium">{row.size}</td>
-							<td class="py-3 pr-4 text-muted-foreground tabular-nums">{row.ua}</td>
-							<td class="py-3 pr-4 tabular-nums">{row.chest}</td>
-							<td class="py-3 pr-4 tabular-nums">{row.sleeve}</td>
-							<td class="py-3 pr-4 tabular-nums">{row.length}</td>
-							<td class="py-3 text-muted-foreground">{row.underneath}</td>
+						{@const active = row.size === selectedSize}
+						<tr class={cn('border-b last:border-0', active && 'bg-brand-soft/50')}>
+							<td class="py-3 pr-3 pl-6">
+								<span
+									class={cn(
+										'inline-flex h-7 min-w-9 items-center justify-center rounded-md px-2 text-xs',
+										active ? 'bg-foreground text-background' : 'ring-1 ring-border ring-inset'
+									)}
+								>
+									{row.size}
+								</span>
+							</td>
+							{#each columns as column (column.key)}
+								<td class="py-3 pr-3 tabular-nums last:pr-6">{row[column.key]}</td>
+							{/each}
 						</tr>
 					{/each}
 				</tbody>
 			</table>
 		</div>
-
-		<p class="text-xs text-muted-foreground">
-			Якщо ви між розмірами — беріть більший: у меншому светр з’їдає рух у плечах. Напишіть зріст і
-			обхват грудей на
-			<a href="mailto:{SITE.email}" class="text-foreground underline underline-offset-4">
-				{SITE.email}
-			</a>, порадимо конкретно.
-		</p>
 	</Dialog.Content>
 </Dialog.Root>

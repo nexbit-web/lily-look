@@ -7,8 +7,14 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import { Textarea } from '$lib/components/ui/textarea';
-	import { DELIVERY_METHODS, deliveryCostFor, type DeliveryMethodValue } from '$lib/config';
+	import {
+		DELIVERY_METHODS,
+		deliveryCostFor,
+		RETURN_DAYS,
+		type DeliveryMethodValue
+	} from '$lib/config';
 	import { formatPrice } from '$lib/money';
+	import { plural } from '$lib/plural';
 	import type { CartView } from '$lib/types';
 	import BanknoteIcon from '@lucide/svelte/icons/banknote';
 	import LoaderIcon from '@lucide/svelte/icons/loader-circle';
@@ -213,7 +219,8 @@
 
 				<div class="mt-4 flex items-center gap-2 border-t pt-4 text-xs text-muted-foreground">
 					<ShieldCheckIcon class="size-4 shrink-0 text-success" />
-					Не підійде розмір — обмін або повернення протягом 14 днів.
+					Не підійде розмір — обмін або повернення протягом {RETURN_DAYS}
+					{plural(RETURN_DAYS, 'дня', 'днів', 'днів')}.
 				</div>
 			</div>
 		</section>

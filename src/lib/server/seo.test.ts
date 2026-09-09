@@ -1,3 +1,4 @@
+import { RETURN_DAYS } from '$lib/config';
 import type { ProductDetail } from '$lib/types';
 import { describe, expect, it } from 'vitest';
 import {
@@ -26,6 +27,10 @@ const product: ProductDetail = {
 	compareAt: 299_900,
 	category: { slug: 'sukni', name: 'Сукні' },
 	images: [{ url: 'https://cdn.test/1.jpg', alt: 'фото' }],
+	attributes: [
+		{ name: 'Склад', value: '95% віскоза, 5% еластан' },
+		{ name: 'Країна виробництва', value: 'Україна' }
+	],
 	variants: [
 		{
 			id: 'v1',
@@ -114,8 +119,22 @@ describe('товар', () => {
 		const offer = (node.hasVariant as { offers: Record<string, unknown> }[])[0].offers;
 		const returns = offer.hasMerchantReturnPolicy as Record<string, unknown>;
 
-		expect(returns.merchantReturnDays).toBe(14);
+		expect(returns.merchantReturnDays).toBe(RETURN_DAYS);
 		expect(returns.applicableCountry).toBe('UA');
+	});
+
+	it('склад і країна лягають у поля, які Google справді читає', () => {
+		const node = productNode(ORIGIN, product) as Record<string, unknown>;
+
+		expect(node.material).toBe('95% віскоза, 5% еластан');
+		expect(node.countryOfOrigin).toBe('Україна');
+	});
+
+	it('без характеристик зайвих полів у розмітці не зʼявляється', () => {
+		const node = productNode(ORIGIN, { ...product, attributes: [] }) as Record<string, unknown>;
+
+		expect(node).not.toHaveProperty('material');
+		expect(node).not.toHaveProperty('countryOfOrigin');
 	});
 
 	it('посилання й фото — абсолютні', () => {

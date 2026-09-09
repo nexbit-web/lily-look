@@ -6,8 +6,9 @@
 	import SectionHeading from '$lib/components/home/section-heading.svelte';
 	import ProductGrid from '$lib/components/product/product-grid.svelte';
 	import { Button } from '$lib/components/ui/button';
-	import { FREE_DELIVERY_FROM, SITE } from '$lib/config';
+	import { FREE_DELIVERY_FROM, RETURN_DAYS, SITE } from '$lib/config';
 	import { formatPrice } from '$lib/money';
+	import { plural } from '$lib/plural';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -19,7 +20,7 @@
 			text: 'Нова Пошта по всій Україні, відправка того ж дня до 15:00.'
 		},
 		{
-			title: 'Обмін і повернення 14 днів',
+			title: `Обмін і повернення ${RETURN_DAYS} ${plural(RETURN_DAYS, 'день', 'дні', 'днів')}`,
 			text: 'Не підійшов розмір — міняємо без пояснень і зайвих питань.'
 		},
 		{
@@ -31,7 +32,12 @@
 
 <PageMeta
 	title="{SITE.name} — жіночий одяг з доставкою по Україні"
-	description="Сукні, костюми, верхній одяг і трикотаж від {SITE.name}. Доставка Новою Поштою по всій Україні, оплата при отриманні, обмін і повернення 14 днів."
+	description="Сукні, костюми, верхній одяг і трикотаж від {SITE.name}. Доставка Новою Поштою по всій Україні, оплата при отриманні, обмін і повернення {RETURN_DAYS} {plural(
+		RETURN_DAYS,
+		'день',
+		'дні',
+		'днів'
+	)}."
 	canonical="/"
 	image={data.banners[0]?.image ?? null}
 />

@@ -1,9 +1,7 @@
+import { MAX_CART_QUANTITY } from '$lib/config';
 import { readCart, removeFromCart, setQuantity } from '$lib/server/cart';
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-
-/** Стеля на випадок підробленої форми — реальний ліміт усе одно залишок. */
-const MAX_QUANTITY = 99;
 
 export const load: PageServerLoad = async ({ cookies }) => {
 	return { cart: await readCart(cookies) };
@@ -19,7 +17,7 @@ export const actions: Actions = {
 		// дорівнюють нулю, тож підроблена форма тихо видалила б позицію.
 		const quantity = typeof raw === 'string' && raw.trim() !== '' ? Number(raw) : Number.NaN;
 
-		if (!itemId || !Number.isInteger(quantity) || quantity < 0 || quantity > MAX_QUANTITY) {
+		if (!itemId || !Number.isInteger(quantity) || quantity < 0 || quantity > MAX_CART_QUANTITY) {
 			return fail(400, { message: 'Некоректний запит.' });
 		}
 

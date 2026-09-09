@@ -27,6 +27,7 @@ const row = (patch: Record<string, unknown> = {}) => ({
 		{ url: 'https://example.test/2.jpg', alt: 'ззаду' }
 	],
 	variants: [{ color: 'Чорний', stock: 3 }],
+	attributes: [],
 	...patch
 });
 
@@ -158,6 +159,25 @@ describe('наявність', () => {
 
 		expect(product).not.toBeNull();
 		expect(product?.variants).toEqual([]);
+	});
+
+	it('характеристики без значення до сторінки не доїжджають', async () => {
+		db.product.findFirst.mockResolvedValue({
+			...row(),
+			description: 'опис',
+			category: { slug: 'sukni', name: 'Сукні' },
+			variants: [],
+			// Так виглядає недозаповнена картка в CRM.
+			attributes: [
+				{ name: 'Склад', value: '  95% віскоза  ' },
+				{ name: 'Країна виробництва', value: '   ' },
+				{ name: '', value: 'Україна' }
+			]
+		});
+
+		const product = await getProduct('suknia-olivia');
+
+		expect(product?.attributes).toEqual([{ name: 'Склад', value: '95% віскоза' }]);
 	});
 
 	it('вимкненого в CRM товару немає навіть за прямим посиланням', async () => {

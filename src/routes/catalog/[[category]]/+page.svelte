@@ -44,7 +44,7 @@
 	index={data.seo.index}
 />
 
-<div class="mx-auto max-w-6xl px-4 py-10">
+<div class="mx-auto max-w-6xl px-4 py-8 md:py-10">
 	<!-- Крихти — список: так їх читає скрінрідер і так їх очікує розмітка. -->
 	<nav aria-label="Хлібні крихти" class="mb-6 text-sm text-muted-foreground">
 		<ol class="flex flex-wrap items-center gap-2">

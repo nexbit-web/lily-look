@@ -63,9 +63,11 @@
 	}
 </script>
 
-<div class="flex flex-col-reverse gap-3 sm:flex-row sm:gap-3">
+<div class="flex flex-col-reverse gap-3 sm:flex-row sm:gap-4">
 	{#if many}
-		<div class="flex gap-2 overflow-x-auto sm:flex-col sm:overflow-visible">
+		<div
+			class="no-scrollbar flex shrink-0 gap-2 overflow-x-auto max-sm:px-4 sm:flex-col sm:overflow-visible"
+		>
 			{#each images as image, position (image.url)}
 				<button
 					type="button"
@@ -73,8 +75,10 @@
 					aria-label="Фото {position + 1}"
 					aria-current={position === index}
 					class={cn(
-						'aspect-466/582 w-16 shrink-0 cursor-pointer overflow-hidden bg-muted transition-opacity sm:w-20',
-						position === index ? 'ring-1 ring-foreground' : 'opacity-60 hover:opacity-100'
+						'aspect-4/5 w-12 shrink-0 cursor-pointer overflow-hidden bg-muted transition-opacity sm:w-16',
+						position === index
+							? 'ring-1 ring-foreground ring-offset-2 ring-offset-background'
+							: 'opacity-55 hover:opacity-100'
 					)}
 				>
 					<img src={image.url} alt="" class="size-full object-cover" loading="lazy" />
@@ -83,10 +87,9 @@
 		</div>
 	{/if}
 
-	<!-- Розмір під макет: на десктопі фіксовані 466×582, нижче — та сама пропорція -->
-	<div
-		class="group relative aspect-466/582 w-full overflow-hidden bg-muted lg:h-[582px] lg:w-[466px] lg:flex-none"
-	>
+	<!-- Фото займає всю ширину колонки: чим більше воно, тим краще продає.
+	     Пропорція 4:5 фіксована, тож висота не стрибає при завантаженні. -->
+	<div class="group relative aspect-4/5 w-full min-w-0 flex-1 overflow-hidden bg-muted">
 		{#if active && !shown[active.url]}
 			<Skeleton class="absolute inset-0 size-full rounded-none" />
 		{/if}
@@ -106,6 +109,7 @@
 					alt={image.alt || name}
 					draggable="false"
 					loading={image.url === images[0]?.url ? 'eager' : 'lazy'}
+					fetchpriority={image.url === images[0]?.url ? 'high' : undefined}
 					onload={() => (shown[image.url] = true)}
 					class="size-full shrink-0 object-cover select-none"
 				/>

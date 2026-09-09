@@ -1,5 +1,6 @@
 import type { Banner } from '$lib/components/home/hero-slider.svelte';
-import { FREE_DELIVERY_FROM } from '$lib/config';
+import { FREE_DELIVERY_FROM, RETURN_DAYS } from '$lib/config';
+import { plural } from '$lib/plural';
 import { formatPrice } from '$lib/money';
 import { listCategoryCards, listFeatured, listNewArrivals, listSale } from '$lib/server/catalog';
 import type { ProductCard } from '$lib/types';
@@ -65,7 +66,7 @@ export const load: PageServerLoad = async ({ setHeaders }) => {
 		{
 			eyebrow: 'Доставка',
 			title: `Безкоштовно від ${formatPrice(FREE_DELIVERY_FROM)}`,
-			text: 'Нова Пошта по всій Україні. Обмін і повернення — 14 днів без пояснень.',
+			text: `Нова Пошта по всій Україні. Обмін і повернення — ${RETURN_DAYS} ${plural(RETURN_DAYS, 'день', 'дні', 'днів')} без пояснень.`,
 			cta: { label: 'Обрати образ', href: '/catalog' },
 			image: (featuredRows[1] ?? featuredRows[0])?.image?.url ?? null,
 			tone: 'neutral'

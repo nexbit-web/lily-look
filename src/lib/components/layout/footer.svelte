@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { FREE_DELIVERY_FROM, SENDER, SITE } from '$lib/config';
+	import { FREE_DELIVERY_FROM, RETURN_DAYS, SENDER, SITE } from '$lib/config';
+	import { plural } from '$lib/plural';
 	import { formatPrice } from '$lib/money';
 	import type { CategoryLink } from '$lib/types';
 
@@ -38,7 +39,7 @@
 			<p class="text-sm font-medium">Покупцям</p>
 			<ul class="space-y-2 text-sm text-muted-foreground">
 				<li>Доставка Новою Поштою по Україні</li>
-				<li>Обмін і повернення — 14 днів</li>
+				<li>Обмін і повернення — {RETURN_DAYS} {plural(RETURN_DAYS, 'день', 'дні', 'днів')}</li>
 				<li>Оплата при отриманні</li>
 				<li>Самовивіз у {SENDER.city}, {SENDER.region}</li>
 			</ul>
