@@ -24,6 +24,19 @@
 		`${summarize(product.description, 90)} Ціна ${formatPrice(product.price)}. Доставка по Україні, обмін ${RETURN_DAYS} ${plural(RETURN_DAYS, 'день', 'дні', 'днів')}.`
 	);
 	const sku = $derived(modelSku(product.variants.map((variant) => variant.sku)));
+
+	/**
+	 * Обраний колір живе тут, бо його слухає галерея, а міняє — форма.
+	 * Значення звіряється зі списком кольорів товару: після переходу на
+	 * інший товар старий вибір просто перестає підходити, і галерея бере
+	 * колір першого варіанта — той самий, що й форма.
+	 */
+	let picked = $state('');
+	const galleryColor = $derived(
+		product.variants.some((variant) => variant.color === picked)
+			? picked
+			: (product.variants[0]?.color ?? null)
+	);
 </script>
 
 <PageMeta
@@ -65,12 +78,16 @@
 			<!-- На телефоні фото виходить за поля сторінки на всю ширину екрана:
 			     річ видно більше, а поля лишаються там, де їх чекає шапка. -->
 			<div class="max-sm:-mx-4 lg:col-start-1 lg:row-start-1">
-				<ProductGallery images={product.images} name={product.name} />
+				<ProductGallery images={product.images} name={product.name} color={galleryColor} />
 			</div>
 
 			<div class="lg:col-start-2 lg:row-span-2 lg:row-start-1">
 				<div class="lg:sticky lg:top-20">
-					<AddToCartForm {product} delivery={data.delivery} />
+					<AddToCartForm
+						{product}
+						delivery={data.delivery}
+						onColorChange={(color) => (picked = color)}
+					/>
 				</div>
 			</div>
 

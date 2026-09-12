@@ -30,7 +30,7 @@ const product: ProductDetail = {
 	price: 264_900,
 	compareAt: null,
 	category: { slug: 'sukni', name: 'Сукні' },
-	images: [{ url: 'https://example.test/1.jpg', alt: 'фото' }],
+	images: [{ url: 'https://example.test/1.jpg', alt: 'фото', color: null }],
 	attributes: [],
 	variants: [
 		variant({}),

@@ -51,6 +51,13 @@ export type ProductAttributeView = {
 	value: string;
 };
 
+/** Фото товару. `color` = null — кадр спільний для всіх кольорів. */
+export type ProductImageView = {
+	url: string;
+	alt: string;
+	color: string | null;
+};
+
 export type ProductDetail = {
 	id: string;
 	slug: string;
@@ -59,7 +66,7 @@ export type ProductDetail = {
 	price: number;
 	compareAt: number | null;
 	category: { slug: string; name: string };
-	images: { url: string; alt: string }[];
+	images: ProductImageView[];
 	variants: ProductVariantView[];
 	/** Тільки заповнені: чого CRM не вказала, того на сторінці немає. */
 	attributes: ProductAttributeView[];

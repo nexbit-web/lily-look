@@ -391,7 +391,11 @@ async function main() {
 					create: product.images.map((imageId, position) => ({
 						url: photo(imageId),
 						alt: `${product.name} — фото ${position + 1}`,
-						position
+						position,
+						// Демо-каталог: розкидаємо кадри по кольорах, щоб було видно,
+						// як галерея перемикається. У бойовому каталозі колір фото
+						// проставляє CRM, а фото без кольору лишаються спільними.
+						color: product.colors[position]?.name ?? null
 					}))
 				},
 				variants: {

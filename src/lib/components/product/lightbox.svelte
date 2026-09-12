@@ -133,12 +133,17 @@
 		if (Math.abs(dx) > 6 || Math.abs(dy) > 6) moved = true;
 
 		if (zoomed) {
+			// Збільшене фото тягнеться в обидва боки — напрямок не обмежуємо.
 			const max = limits();
 			panX = clamp(fromX + dx, max.x);
 			panY = clamp(fromY + dy, max.y);
-		} else {
-			swipeX = dx;
+			return;
 		}
+
+		// Без зуму жест має сенс лише горизонтальний: рух пальцем вниз — це
+		// намір закрити або просто зісковзнути, а не гортати.
+		if (Math.abs(dy) > Math.abs(dx)) return;
+		swipeX = dx;
 	}
 
 	function pointerup() {
@@ -147,6 +152,12 @@
 
 		if (zoomed) return;
 		if (Math.abs(swipeX) > SWIPE_THRESHOLD) go(swipeX < 0 ? 1 : -1);
+		swipeX = 0;
+	}
+
+	/** Жест забрав браузер — кадр повертаємо на місце, але нікуди не гортаємо. */
+	function cancelDrag() {
+		dragging = false;
 		swipeX = 0;
 	}
 
@@ -234,7 +245,7 @@
 						onpointerdown={pointerdown}
 						onpointermove={pointermove}
 						onpointerup={pointerup}
-						onpointercancel={pointerup}
+						onpointercancel={cancelDrag}
 						style="transform: translate3d({zoomed ? panX : swipeX}px, {zoomed
 							? panY
 							: 0}px, 0) scale({zoomed ? ZOOM_SCALE : 1});"

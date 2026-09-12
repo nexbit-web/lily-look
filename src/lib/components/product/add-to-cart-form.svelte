@@ -19,8 +19,14 @@
 	let {
 		product,
 		/** Способи доставки з порахованою датою отримання — рахує сервер. */
-		delivery = []
-	}: { product: ProductDetail; delivery?: DeliveryOption[] } = $props();
+		delivery = [],
+		/** Галерея показує фото обраного кольору, тож про вибір треба сказати. */
+		onColorChange
+	}: {
+		product: ProductDetail;
+		delivery?: DeliveryOption[];
+		onColorChange?: (color: string) => void;
+	} = $props();
 
 	/** Нижче цієї межі показуємо, скільки лишилось — це підштовхує до рішення. */
 	const LOW_STOCK = 3;
@@ -62,6 +68,12 @@
 		// Розмір міг бути доступний в іншому кольорі, але не в цьому.
 		if (selectedSize && !variantFor(color, selectedSize)?.stock) selectedSize = '';
 	}
+
+	// Про колір повідомляємо й одразу після монтування: галерея має знати,
+	// з чого починати, а не лише що змінилось.
+	$effect(() => {
+		onColorChange?.(selectedColor);
+	});
 
 	function label() {
 		if (soldOut) return 'Немає в наявності';

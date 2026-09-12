@@ -26,7 +26,7 @@ const product: ProductDetail = {
 	price: 219_900,
 	compareAt: 299_900,
 	category: { slug: 'sukni', name: 'Сукні' },
-	images: [{ url: 'https://cdn.test/1.jpg', alt: 'фото' }],
+	images: [{ url: 'https://cdn.test/1.jpg', alt: 'фото', color: null }],
 	attributes: [
 		{ name: 'Склад', value: '95% віскоза, 5% еластан' },
 		{ name: 'Країна виробництва', value: 'Україна' }
@@ -140,7 +140,7 @@ describe('товар', () => {
 	it('посилання й фото — абсолютні', () => {
 		const node = productNode(ORIGIN, {
 			...product,
-			images: [{ url: '/uploads/1.jpg', alt: '' }]
+			images: [{ url: '/uploads/1.jpg', alt: '', color: null }]
 		}) as Record<string, unknown>;
 
 		expect(node.url).toBe(`${ORIGIN}/product/suknia-olivia`);

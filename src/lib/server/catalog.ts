@@ -289,7 +289,7 @@ export async function getProduct(slug: string): Promise<ProductDetail | null> {
 			price: true,
 			finalPrice: true,
 			category: { select: { slug: true, name: true } },
-			images: { select: { url: true, alt: true }, orderBy: { position: 'asc' } },
+			images: { select: { url: true, alt: true, color: true }, orderBy: { position: 'asc' } },
 			attributes: {
 				select: { name: true, value: true },
 				orderBy: [{ position: 'asc' }, { name: 'asc' }]
@@ -320,7 +320,11 @@ export async function getProduct(slug: string): Promise<ProductDetail | null> {
 		price: row.finalPrice,
 		compareAt: row.finalPrice < row.price ? row.price : null,
 		category: row.category,
-		images: row.images.map((image) => ({ url: image.url, alt: image.alt ?? row.name })),
+		images: row.images.map((image) => ({
+			url: image.url,
+			alt: image.alt ?? row.name,
+			color: image.color
+		})),
 		// Порожнє поле в CRM — це «не заповнили», а не характеристика без
 		// значення: такі рядки до сторінки не доїжджають.
 		attributes: row.attributes
