@@ -31,12 +31,28 @@ const LINE_INCLUDE = {
 					slug: true,
 					finalPrice: true,
 					isActive: true,
-					images: { select: { url: true }, orderBy: { position: 'asc' }, take: 1 }
+					// Без `take: 1`: у кошику треба фото саме того кольору, який
+					// обрали, а перше фото товару — це колір за замовчуванням.
+					images: { select: { url: true, color: true }, orderBy: { position: 'asc' } }
 				}
 			}
 		}
 	}
 } as const;
+
+/**
+ * Фото позиції в кошику: спершу кадр обраного кольору, потім спільний
+ * (той, у якого кольору немає), і лише потім перше-ліпше.
+ *
+ * Без цього покупець, обравши другий колір, бачив у кошику фото першого —
+ * і небезпідставно вважав, що додалось не те.
+ */
+function photoFor(images: { url: string; color: string | null }[], color: string): string | null {
+	const own = images.find((image) => image.color === color);
+	const shared = images.find((image) => image.color === null);
+
+	return (own ?? shared ?? images[0])?.url ?? null;
+}
 
 /**
  * Кеш на час одного HTTP-запиту.
@@ -91,7 +107,7 @@ async function loadCart(cookies: Cookies): Promise<CartView> {
 				productSlug: item.variant.product.slug,
 				size: item.variant.size,
 				color: item.variant.color,
-				imageUrl: item.variant.product.images[0]?.url ?? null,
+				imageUrl: photoFor(item.variant.product.images, item.variant.color),
 				unitPrice,
 				quantity,
 				lineTotal: unitPrice * quantity,

@@ -55,7 +55,7 @@ const variant = (patch: Record<string, unknown> = {}) => ({
 		slug: 'suknia-olivia',
 		finalPrice: 100_000,
 		isActive: true,
-		images: [{ url: 'https://example.test/1.jpg' }]
+		images: [{ url: 'https://example.test/1.jpg', color: null }]
 	},
 	...patch
 });
@@ -139,6 +139,62 @@ describe('readCart — ціни', () => {
 		const { cookies } = makeCookies({ lily_cart: 'ghost' });
 
 		await expect(readCart(cookies)).resolves.toMatchObject({ lines: [], subtotal: 0 });
+	});
+});
+
+/**
+ * Фото позиції має відповідати обраному кольору. Інакше покупець додає
+ * білу сорочку, а в кошику бачить чорну — і не вірить, що додалось те.
+ */
+describe('readCart — фото кольору', () => {
+	const withPhotos = (images: { url: string; color: string | null }[], color = 'Білий') =>
+		cartWith([
+			item({
+				variant: variant({
+					color,
+					product: {
+						name: 'Сорочка',
+						slug: 'sorochka',
+						finalPrice: 100_000,
+						isActive: true,
+						images
+					}
+				})
+			})
+		]);
+
+	it('бере кадр обраного кольору, а не перший', async () => {
+		withPhotos([
+			{ url: 'https://example.test/black.jpg', color: 'Чорний' },
+			{ url: 'https://example.test/white.jpg', color: 'Білий' }
+		]);
+
+		const cart = await readCart(makeCookies({ lily_cart: 'cart-1' }).cookies);
+		expect(cart.lines[0].imageUrl).toBe('https://example.test/white.jpg');
+	});
+
+	it('без власного кадру бере спільний', async () => {
+		withPhotos([
+			{ url: 'https://example.test/black.jpg', color: 'Чорний' },
+			{ url: 'https://example.test/shared.jpg', color: null }
+		]);
+
+		const cart = await readCart(makeCookies({ lily_cart: 'cart-1' }).cookies);
+		expect(cart.lines[0].imageUrl).toBe('https://example.test/shared.jpg');
+	});
+
+	it('коли кольори не розмічені — перше фото товару', async () => {
+		withPhotos([{ url: 'https://example.test/black.jpg', color: 'Чорний' }]);
+
+		const cart = await readCart(makeCookies({ lily_cart: 'cart-1' }).cookies);
+		expect(cart.lines[0].imageUrl).toBe('https://example.test/black.jpg');
+	});
+
+	it('товар без фото не ламає кошик', async () => {
+		withPhotos([]);
+
+		const cart = await readCart(makeCookies({ lily_cart: 'cart-1' }).cookies);
+		expect(cart.lines[0].imageUrl).toBeNull();
 	});
 });
 
