@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button';
+	import { IMAGE_WIDTHS, imageSrcSet } from '$lib/image';
 	import { cn } from '$lib/utils';
 	import ChevronLeftIcon from '@lucide/svelte/icons/chevron-left';
 	import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
@@ -20,6 +21,44 @@
 	let paused = $state(false);
 
 	const current = $derived(banners[index]);
+
+	/**
+	 * Банер — найбільший кадр сторінки й найдовший у завантаженні. Поки він
+	 * не приїхав, на його місці пульсує заглушка: екран не порожній і не
+	 * підстрибне, коли фото стане на місце. Текст банера віддає сервер, тож
+	 * читати його можна одразу.
+	 */
+	let ready = $state(false);
+
+	/**
+	 * Сусідні слайди лежать у тому ж кадрі, тільки прозорі, — для браузера
+	 * вони «на екрані», тож `loading=lazy` їх не стримує, і вони тягнуть
+	 * канал у першого фото. А перше фото — це найбільший елемент сторінки,
+	 * по ньому Google і міряє швидкість. Тому решту вмикаємо після нього.
+	 */
+	let awake = $state(false);
+
+	const hasImage = $derived(banners.some((banner) => banner.image !== null));
+
+	/**
+	 * Фото з кеша встигає завантажитись ще до гідратації, і `onload` по
+	 * ньому вже не спрацює — заглушка висіла б над готовим кадром. Такий
+	 * випадок ловимо одразу при появі елемента.
+	 */
+	function whenShown(node: HTMLImageElement) {
+		if (node.complete) ready = true;
+	}
+
+	$effect(() => {
+		if (ready) {
+			awake = true;
+			return;
+		}
+		// Якщо перше фото не приїхало (немає його або мережа лягла), сусіди
+		// все одно мають з'явитись — інакше гортати буде нічого.
+		const timer = setTimeout(() => (awake = true), 3000);
+		return () => clearTimeout(timer);
+	});
 
 	function go(next: number) {
 		index = (next + banners.length) % banners.length;
@@ -43,6 +82,10 @@
 	aria-roledescription="carousel"
 	aria-label="Акції та новинки"
 >
+	{#if hasImage && !ready}
+		<div class="absolute inset-0 animate-pulse bg-muted" aria-hidden="true"></div>
+	{/if}
+
 	{#each banners as banner, bannerIndex (banner.title)}
 		{@const active = bannerIndex === index}
 		<div
@@ -52,12 +95,17 @@
 			)}
 			aria-hidden={!active}
 		>
-			{#if banner.image}
+			{#if banner.image && (active || awake)}
 				<img
+					{@attach whenShown}
 					src={banner.image}
+					srcset={imageSrcSet(banner.image, IMAGE_WIDTHS.hero)}
+					fetchpriority={bannerIndex === 0 ? 'high' : 'low'}
+					sizes="(min-width: 1200px) 1152px, 100vw"
 					alt=""
 					loading={bannerIndex === 0 ? 'eager' : 'lazy'}
-					fetchpriority={bannerIndex === 0 ? 'high' : 'auto'}
+					decoding={bannerIndex === 0 ? 'sync' : 'async'}
+					onload={() => (ready = true)}
 					class="size-full object-cover object-top"
 				/>
 			{/if}

@@ -56,10 +56,11 @@ model Product {
   categoryId String
   category   Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
 
-  images     ProductImage[]
-  variants   ProductVariant[]
-  discounts  DiscountProduct[]
-  attributes ProductAttribute[]
+  images       ProductImage[]
+  variants     ProductVariant[]
+  discounts    DiscountProduct[]
+  attributes   ProductAttribute[]
+  measurements ProductMeasurement[]
 
   /// Вимикач моделі в CRM: false — товару на сайті немає взагалі.
   isActive   Boolean @default(true)
@@ -71,6 +72,34 @@ model Product {
   @@index([categoryId, isActive])
   @@index([isActive, createdAt])
   @@index([isActive, finalPrice])
+}
+
+/// Заміри розмірів — те, що показує таблиця розмірів на сторінці товару.
+///
+/// Таблицю завела CRM, сайт із неї тільки читає: модель списана з бази
+/// як є (`prisma db pull`), тож `id` тут без `@default` — його генерує
+/// той, хто пише рядок. Колонки заміру необовʼязкові: у спідниці немає
+/// рукава, і порожня колонка просто не малюється.
+///
+/// Немає жодного рядка — немає й посилання на таблицю: показувати чужі
+/// заміри гірше, ніж не показувати нічого.
+model ProductMeasurement {
+  id        String  @id
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  /// Розмір, до якого належать заміри — рядок із `ProductVariant.size`.
+  size     String
+  /// Український розмір: «44», «50–52».
+  ua       String?
+  chest    Int?
+  sleeve   Int?
+  length   Int?
+  /// Порядок рядка в таблиці.
+  position Int     @default(0)
+
+  @@unique([productId, size])
+  @@index([productId, position])
 }
 
 /// Характеристика товару: склад, країна виробництва, догляд, сезон — усе,

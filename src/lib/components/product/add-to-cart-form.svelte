@@ -240,7 +240,9 @@
 		<fieldset class="space-y-3">
 			<div class="flex items-center justify-between gap-4">
 				<legend class="text-xs tracking-[0.15em] uppercase">Розмір</legend>
-				<SizeChartDialog categorySlug={product.category.slug} {selectedSize} />
+				{#if product.measurements.length}
+					<SizeChartDialog measurements={product.measurements} {selectedSize} />
+				{/if}
 			</div>
 
 			<div bind:this={sizesBox}>

@@ -212,6 +212,23 @@ export async function listNewArrivals(limit = 4): Promise<ProductCard[]> {
 	return rows.map(toCard);
 }
 
+/**
+ * Товари однієї категорії — стрічка на головній.
+ *
+ * Порядок той самий, що й у каталозі за замовчуванням (спершу свіже), тож
+ * покупець бачить на головній початок тієї ж полиці, на яку веде посилання
+ * «Уся категорія».
+ */
+export async function listCategoryProducts(slug: string, limit: number): Promise<ProductCard[]> {
+	const rows = await db.product.findMany({
+		where: { ...VISIBLE_PRODUCT, category: { slug } },
+		select: CARD_SELECT,
+		orderBy: { createdAt: 'desc' },
+		take: limit
+	});
+	return rows.map(toCard);
+}
+
 /** Доступні розміри й кольори в межах категорії — для панелі фільтрів. */
 export async function listFacets(categorySlug?: string): Promise<CatalogFacets> {
 	const rows = await db.productVariant.findMany({
@@ -294,6 +311,12 @@ export async function getProduct(slug: string): Promise<ProductDetail | null> {
 				select: { name: true, value: true },
 				orderBy: [{ position: 'asc' }, { name: 'asc' }]
 			},
+			// Порядок рядків задає CRM: розміри бувають які завгодно
+			// («S/M», «4ХL»), і вгадувати їх послідовність тут нічим.
+			measurements: {
+				select: { size: true, ua: true, chest: true, sleeve: true, length: true },
+				orderBy: [{ position: 'asc' }, { size: 'asc' }]
+			},
 			variants: {
 				where: AVAILABLE_VARIANT,
 				select: {
@@ -330,6 +353,7 @@ export async function getProduct(slug: string): Promise<ProductDetail | null> {
 		attributes: row.attributes
 			.map((attribute) => ({ name: attribute.name.trim(), value: attribute.value.trim() }))
 			.filter((attribute) => attribute.name !== '' && attribute.value !== ''),
+		measurements: row.measurements,
 		variants: row.variants.map((variant) => ({
 			id: variant.id,
 			sku: variant.sku,

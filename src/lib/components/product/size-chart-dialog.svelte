@@ -1,25 +1,36 @@
 <script lang="ts">
 	import * as Dialog from '$lib/components/ui/dialog';
-	import { sizeChartFor } from '$lib/config';
+	import type { ProductMeasurementView } from '$lib/types';
 	import { cn } from '$lib/utils';
 	import RulerIcon from '@lucide/svelte/icons/ruler';
 
-	let { categorySlug, selectedSize = '' }: { categorySlug: string; selectedSize?: string } =
-		$props();
-
-	const chart = $derived(sizeChartFor(categorySlug));
-
 	/**
-	 * Заміри — це числа, і читаються вони колонками. Тому шапка тримається
-	 * зверху при прокрутці, а обраний розмір підсвічений: покупець звіряє
-	 * свій рядок, не гублячи, де він.
+	 * Таблиця розмірів конкретної речі.
+	 *
+	 * Жодного довідника в коді: рядки — це заміри з бази, які веде CRM, у
+	 * тому ж порядку. Тому в таблиці стоять саме ті розміри, що є в товару,
+	 * — хоч «S/M», хоч «6XL», — а не універсальний ряд XS–XL.
 	 */
-	const columns = [
+
+	let {
+		measurements,
+		selectedSize = ''
+	}: { measurements: ProductMeasurementView[]; selectedSize?: string } = $props();
+
+	const COLUMNS = [
 		{ key: 'ua', title: 'UA' },
 		{ key: 'chest', title: 'Груди' },
 		{ key: 'sleeve', title: 'Рукав' },
 		{ key: 'length', title: 'Довжина' }
 	] as const;
+
+	/**
+	 * Колонка з'являється, тільки якщо хоч в одному рядку є значення:
+	 * у спідниці немає рукава, і порожній стовпчик лише збиває з пантелику.
+	 */
+	const columns = $derived(
+		COLUMNS.filter((column) => measurements.some((row) => row[column.key] !== null))
+	);
 </script>
 
 <Dialog.Root>
@@ -35,12 +46,13 @@
 			<!-- Заголовок без засічок і без капсу: у вендореному компоненті
 			     вони прописані за замовчуванням, тут вони зайві. -->
 			<Dialog.Title class="font-sans text-lg font-medium tracking-tight normal-case">
-				{chart.title}
+				Заміри виробу
 			</Dialog.Title>
-			<Dialog.Description class="text-left text-xs">{chart.note}</Dialog.Description>
+			<Dialog.Description class="text-left text-xs">
+				Заміри самої речі в сантиметрах. UA — український розмір.
+			</Dialog.Description>
 		</Dialog.Header>
 
-		<!-- Таблиця ширша за модалку на мобільному — скролиться всередині себе -->
 		<div class="max-h-[60vh] overflow-auto">
 			<table class="w-full border-collapse text-sm">
 				<thead class="sticky top-0 z-10 bg-background">
@@ -52,7 +64,7 @@
 					</tr>
 				</thead>
 				<tbody>
-					{#each chart.rows as row (row.size)}
+					{#each measurements as row (row.size)}
 						{@const active = row.size === selectedSize}
 						<tr class={cn('border-b last:border-0', active && 'bg-brand-soft/50')}>
 							<td class="py-3 pr-3 pl-6">
@@ -66,7 +78,7 @@
 								</span>
 							</td>
 							{#each columns as column (column.key)}
-								<td class="py-3 pr-3 tabular-nums last:pr-6">{row[column.key]}</td>
+								<td class="py-3 pr-3 tabular-nums last:pr-6">{row[column.key] ?? '—'}</td>
 							{/each}
 						</tr>
 					{/each}

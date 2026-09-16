@@ -3,7 +3,17 @@
 	import ProductCard from '$lib/components/product/product-card.svelte';
 	import type { ProductCard as ProductCardData } from '$lib/types';
 
-	let { products }: { products: ProductCardData[] } = $props();
+	let {
+		products,
+		priority = 0
+	}: {
+		products: ProductCardData[];
+		/**
+		 * Скільки перших карток вантажать фото одразу. Нуль — усі ліниво:
+		 * так і треба скрізь, де сітка не найбільший елемент першого екрана.
+		 */
+		priority?: number;
+	} = $props();
 
 	/**
 	 * Кожна картка з'являється сама, а не разом з усією сіткою: спостерігач
@@ -18,7 +28,7 @@
 <ul class="-mx-2 grid grid-cols-2 gap-x-2 gap-y-8 sm:mx-0 sm:gap-x-5 sm:gap-y-10 lg:grid-cols-4">
 	{#each products as product, index (product.id)}
 		<li use:reveal={{ delay: (index % 4) * STAGGER_MS }}>
-			<ProductCard {product} priority={index < 4} />
+			<ProductCard {product} priority={index < priority} />
 		</li>
 	{/each}
 </ul>

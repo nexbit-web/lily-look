@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { IMAGE_WIDTHS, imageSrcSet } from '$lib/image';
 	import { reveal } from '$lib/actions/reveal';
 	import type { CategoryCard } from '$lib/types';
 	import ArrowRightIcon from '@lucide/svelte/icons/arrow-right';
@@ -24,6 +25,8 @@
 						<!-- alt порожній свідомо: назва категорії поруч, у підписі. -->
 						<img
 							src={category.imageUrl}
+							srcset={imageSrcSet(category.imageUrl, IMAGE_WIDTHS.card)}
+							sizes="(min-width: 1024px) 360px, 50vw"
 							alt=""
 							loading={index < 3 ? 'eager' : 'lazy'}
 							class="size-full object-cover transition-transform duration-700 ease-out group-hover:scale-105 motion-reduce:transition-none"

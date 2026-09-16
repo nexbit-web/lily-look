@@ -139,7 +139,7 @@
 						<Button href="/catalog" variant="outline" class="mt-6">До категорій</Button>
 					</div>
 				{:else}
-					<ProductGrid products={data.items} />
+					<ProductGrid products={data.items} priority={4} />
 
 					{#if data.pageCount > 1}
 						<div class="mt-14 flex items-center justify-center gap-4">

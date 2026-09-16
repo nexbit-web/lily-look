@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { reveal } from '$lib/actions/reveal';
+	import { IMAGE_WIDTHS, imageSrcSet } from '$lib/image';
 	import type { CategoryCard } from '$lib/types';
 
 	let { categories }: { categories: CategoryCard[] } = $props();
@@ -29,6 +30,8 @@
 						{#if category.imageUrl}
 							<img
 								src={category.imageUrl}
+								srcset={imageSrcSet(category.imageUrl, IMAGE_WIDTHS.tile)}
+								sizes="(min-width: 1024px) 176px, 128px"
 								alt=""
 								loading="lazy"
 								class="size-full object-cover transition-transform duration-700 ease-out group-hover:scale-105 motion-reduce:transition-none"

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { imageSrc } from '$lib/image';
 	import { Button } from '$lib/components/ui/button';
 	import { ORDER_STATUS_LABELS, SITE, deliveryMethod } from '$lib/config';
 	import { formatPrice } from '$lib/money';
@@ -62,7 +63,11 @@
 						class="size-16 shrink-0 overflow-hidden rounded-md bg-muted"
 					>
 						{#if item.imageUrl}
-							<img src={item.imageUrl} alt={item.productName} class="size-full object-cover" />
+							<img
+								src={imageSrc(item.imageUrl, 192)}
+								alt={item.productName}
+								class="size-full object-cover"
+							/>
 						{/if}
 					</a>
 					<div class="flex flex-1 justify-between gap-4 text-sm">

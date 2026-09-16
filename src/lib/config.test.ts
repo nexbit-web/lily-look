@@ -4,8 +4,7 @@ import {
 	deliveryCostFor,
 	deliveryMethod,
 	FREE_DELIVERY_FROM,
-	SENDER,
-	sizeChartFor
+	SENDER
 } from './config';
 
 describe('способи доставки', () => {
@@ -43,20 +42,5 @@ describe('deliveryCostFor', () => {
 describe('відправник', () => {
 	it('має ref міста для розрахунку тарифу НП', () => {
 		expect(SENDER.cityRef).toMatch(/^[0-9a-f-]{36}$/);
-	});
-});
-
-describe('sizeChartFor', () => {
-	it('дає таблицю під категорію, а на невідому — запасну', () => {
-		expect(sizeChartFor('verkhniy-odiah').title).toMatch(/куртки/);
-		expect(sizeChartFor('чогось-такого-немає').rows.length).toBeGreaterThan(0);
-	});
-
-	it('заміри зростають разом із розміром', () => {
-		for (const slug of ['verkhniy-odiah', 'trykotazh', 'невідома']) {
-			const chest = sizeChartFor(slug).rows.map((row) => row.chest);
-			const sorted = [...chest].sort((a, b) => a - b);
-			expect(chest).toEqual(sorted);
-		}
 	});
 });

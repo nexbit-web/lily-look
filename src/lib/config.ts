@@ -31,6 +31,28 @@ export const SIZE_ORDER = ['XS', 'S', 'M', 'L', 'XL', 'XXL'] as const;
 export const PRODUCTS_PER_PAGE = 12;
 
 /**
+ * Головна сторінка.
+ *
+ * `HOME_BLOCK_SIZE` — рівно один ряд карток на десктопі в блоках «Знижки»
+ * і «Новинки». `HOME_CATEGORY_LIMIT` — скільки речей показує стрічка однієї
+ * категорії; решта лишається за посиланням «Уся категорія», інакше головна
+ * перетворилась би на весь каталог одним полотном.
+ * `HOME_EAGER_SECTIONS` — скільки стрічок категорій віддає сервер одразу
+ * в HTML (їх видно майже без прокрутки й вони мають бути в індексі);
+ * усі наступні довантажуються, коли покупець до них догортає.
+ */
+/**
+ * Скільки живе відповідь каталогу в пам'яті сервера. Каталог веде CRM, і
+ * правки доїжджають на сайт за цю хвилину; сторінка товару не кешується
+ * взагалі — там вирішує залишок на складі.
+ */
+export const CATALOG_CACHE_MS = 60_000;
+
+export const HOME_BLOCK_SIZE = 4;
+export const HOME_CATEGORY_LIMIT = 8;
+export const HOME_EAGER_SECTIONS = 2;
+
+/**
  * Стеля кількості однієї позиції — захист від підробленої форми.
  * Реальний ліміт усе одно залишок на складі.
  */
@@ -118,103 +140,6 @@ export function deliveryMethod(value: DeliveryMethodValue) {
 export function deliveryCostFor(value: DeliveryMethodValue, subtotal: number): number {
 	if (subtotal >= FREE_DELIVERY_FROM) return 0;
 	return deliveryMethod(value).cost;
-}
-
-/**
- * Таблиці замірів. Ключ — slug категорії, `default` — запасний варіант.
- * Заміри самої речі в застебнутому вигляді, у сантиметрах.
- */
-export type SizeChartRow = {
-	size: string;
-	ua: string;
-	chest: number;
-	sleeve: number;
-	length: number;
-};
-
-export type SizeChart = {
-	title: string;
-	note: string;
-	rows: SizeChartRow[];
-};
-
-const OUTERWEAR_CHART: SizeChart = {
-	title: 'Заміри куртки, см',
-	note: 'Заміри самої куртки в застебнутому вигляді, у сантиметрах.',
-	rows: [
-		{
-			size: 'XS',
-			ua: '40–42',
-			chest: 96,
-			sleeve: 60,
-			length: 92
-		},
-		{
-			size: 'S',
-			ua: '44',
-			chest: 100,
-			sleeve: 61,
-			length: 94
-		},
-		{ size: 'M', ua: '46', chest: 104, sleeve: 62, length: 96 },
-		{ size: 'L', ua: '48', chest: 109, sleeve: 63, length: 98 },
-		{
-			size: 'XL',
-			ua: '50–52',
-			chest: 114,
-			sleeve: 64,
-			length: 100
-		}
-	]
-};
-
-const DEFAULT_CHART: SizeChart = {
-	title: 'Заміри виробу, см',
-	note: 'Заміри самої речі в розкладеному вигляді, у сантиметрах.',
-	rows: [
-		{ size: 'XS', ua: '40–42', chest: 84, sleeve: 58, length: 88 },
-		{ size: 'S', ua: '44', chest: 88, sleeve: 59, length: 90 },
-		{ size: 'M', ua: '46', chest: 92, sleeve: 60, length: 92 },
-		{ size: 'L', ua: '48', chest: 97, sleeve: 61, length: 94 },
-		{
-			size: 'XL',
-			ua: '50–52',
-			chest: 102,
-			sleeve: 62,
-			length: 96
-		}
-	]
-};
-
-const SIZE_CHARTS: Record<string, SizeChart> = {
-	'verkhniy-odiah': OUTERWEAR_CHART,
-	trykotazh: {
-		title: 'Заміри трикотажу, см',
-		note: 'Трикотаж тягнеться — заміри наведені без розтягування. Якщо любите вільну посадку, беріть на розмір більше.',
-		rows: [
-			{ size: 'XS', ua: '40–42', chest: 88, sleeve: 59, length: 62 },
-			{ size: 'S', ua: '44', chest: 92, sleeve: 60, length: 64 },
-			{
-				size: 'M',
-				ua: '46',
-				chest: 96,
-				sleeve: 61,
-				length: 66
-			},
-			{ size: 'L', ua: '48', chest: 101, sleeve: 62, length: 68 },
-			{
-				size: 'XL',
-				ua: '50–52',
-				chest: 106,
-				sleeve: 63,
-				length: 70
-			}
-		]
-	}
-};
-
-export function sizeChartFor(categorySlug: string): SizeChart {
-	return SIZE_CHARTS[categorySlug] ?? DEFAULT_CHART;
 }
 
 export const ORDER_STATUS_LABELS = {

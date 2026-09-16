@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { IMAGE_WIDTHS, imageSrc, imageSrcSet } from '$lib/image';
 	import { Spinner } from '$lib/components/ui/spinner';
 	import { cn } from '$lib/utils';
 	import ChevronLeftIcon from '@lucide/svelte/icons/chevron-left';
@@ -238,6 +239,8 @@
 					<img
 						bind:this={imageEl}
 						src={current.url}
+						srcset={imageSrcSet(current.url, IMAGE_WIDTHS.gallery)}
+						sizes="100vw"
 						alt={current.alt || name}
 						draggable="false"
 						onload={() => (loading = false)}
@@ -295,7 +298,12 @@
 									: 'opacity-50 hover:opacity-100'
 							)}
 						>
-							<img src={image.url} alt="" class="size-full object-cover" loading="lazy" />
+							<img
+								src={imageSrc(image.url, 200)}
+								alt=""
+								class="size-full object-cover"
+								loading="lazy"
+							/>
 						</button>
 					{/each}
 				</div>

@@ -31,6 +31,7 @@ const product: ProductDetail = {
 	compareAt: null,
 	category: { slug: 'sukni', name: 'Сукні' },
 	images: [{ url: 'https://example.test/1.jpg', alt: 'фото', color: null }],
+	measurements: [],
 	attributes: [],
 	variants: [
 		variant({}),

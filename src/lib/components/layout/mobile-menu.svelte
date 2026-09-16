@@ -28,11 +28,10 @@
 			{#each categories as category (category.slug)}
 				<a
 					href="/catalog/{category.slug}"
-					class="flex items-center justify-between rounded-xl px-3 py-2 text-sm hover:bg-accent"
+					class="rounded-xl px-3 py-2 text-sm hover:bg-accent"
 					onclick={() => (open = false)}
 				>
 					{category.name}
-					<span class="text-xs text-muted-foreground">{category.productCount}</span>
 				</a>
 			{/each}
 		</nav>

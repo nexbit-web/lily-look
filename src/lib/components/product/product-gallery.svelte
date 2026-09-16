@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { IMAGE_WIDTHS, imageSrc, imageSrcSet } from '$lib/image';
 	import Lightbox from '$lib/components/product/lightbox.svelte';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import type { ProductImageView } from '$lib/types';
@@ -93,7 +94,9 @@
 				// яке покупець бачить просто зараз.
 				preload.fetchPriority = 'low';
 				preload.decoding = 'async';
-				preload.src = image.url;
+				// Та сама ширина, що й у галереї, — інакше прогрів тягнув би
+				// оригінал, який потім ніде не знадобиться.
+				preload.src = imageSrc(image.url, 900);
 			}
 		};
 
@@ -230,7 +233,12 @@
 							: 'opacity-55 hover:opacity-100'
 					)}
 				>
-					<img src={image.url} alt="" class="size-full object-cover" loading="lazy" />
+					<img
+						src={imageSrc(image.url, 200)}
+						alt=""
+						class="size-full object-cover"
+						loading="lazy"
+					/>
 				</button>
 			{/each}
 		</div>
@@ -255,6 +263,8 @@
 			{#each frames as image (image.url)}
 				<img
 					src={image.url}
+					srcset={imageSrcSet(image.url, IMAGE_WIDTHS.gallery)}
+					sizes="(min-width: 1024px) 690px, 100vw"
 					alt={image.alt || name}
 					draggable="false"
 					loading={image.url === frames[0]?.url ? 'eager' : 'lazy'}

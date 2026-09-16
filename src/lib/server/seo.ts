@@ -1,3 +1,4 @@
+import { imageSrc } from '$lib/image';
 import { deliveryMethod, FREE_DELIVERY_FROM, RETURN_DAYS, SENDER, SITE } from '$lib/config';
 import type { ProductCard, ProductDetail } from '$lib/types';
 
@@ -179,7 +180,9 @@ function schemaAttributes(product: ProductDetail): Record<string, string> {
 
 export function productNode(origin: string, product: ProductDetail): JsonLdNode {
 	const url = absolute(origin, `/product/${product.slug}`);
-	const images = product.images.map((image) => absolute(origin, image.url));
+	// Google хоче велике фото, але не оригінал на два мегабайти: у розмітку
+	// йде та сама ширина, що й у відкритому перегляді.
+	const images = product.images.map((image) => absolute(origin, imageSrc(image.url, 1200)));
 	const brand = { '@type': 'Brand', name: SITE.name };
 
 	const base = {

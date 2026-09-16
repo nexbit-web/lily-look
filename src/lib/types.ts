@@ -34,6 +34,21 @@ export type ProductCard = {
 	inStock: boolean;
 };
 
+/**
+ * Стрічка однієї категорії на головній.
+ *
+ * `products === null` означає «ще не завантажено»: такі стрічки лежать
+ * нижче першого екрана й приїжджають окремим запитом, коли покупець до
+ * них догортає. Назва й кількість відомі одразу — заголовок і посилання
+ * на категорію є в HTML навіть без JS.
+ */
+export type HomeSection = {
+	slug: string;
+	name: string;
+	productCount: number;
+	products: ProductCard[] | null;
+};
+
 export type ProductVariantView = {
 	id: string;
 	/** Артикул: іде в розмітку Schema.org як sku/mpn. */
@@ -58,6 +73,20 @@ export type ProductImageView = {
 	color: string | null;
 };
 
+/**
+ * Рядок таблиці розмірів — заміри одного розміру, як їх веде CRM.
+ * Порожнє поле означає «для цієї речі замір не має сенсу» (рукав у
+ * спідниці), і колонка з такими полями не малюється взагалі.
+ */
+export type ProductMeasurementView = {
+	size: string;
+	/** Український розмір: «44», «50–52». */
+	ua: string | null;
+	chest: number | null;
+	sleeve: number | null;
+	length: number | null;
+};
+
 export type ProductDetail = {
 	id: string;
 	slug: string;
@@ -70,6 +99,8 @@ export type ProductDetail = {
 	variants: ProductVariantView[];
 	/** Тільки заповнені: чого CRM не вказала, того на сторінці немає. */
 	attributes: ProductAttributeView[];
+	/** Порожньо — таблиці розмірів на сторінці не буде зовсім. */
+	measurements: ProductMeasurementView[];
 };
 
 /**

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from './generated/client.js';
@@ -396,6 +397,21 @@ async function main() {
 						// як галерея перемикається. У бойовому каталозі колір фото
 						// проставляє CRM, а фото без кольору лишаються спільними.
 						color: product.colors[position]?.name ?? null
+					}))
+				},
+				// Заміри розмірів. У бойовому каталозі їх веде CRM — тут лише
+				// правдоподібні числа, щоб таблиця розмірів було що показати.
+				// `id` генеруємо самі: у схемі його немає за замовчуванням,
+				// бо таблицю заповнює той, хто пише рядок.
+				measurements: {
+					create: product.sizes.map((size, step) => ({
+						id: randomUUID(),
+						size,
+						ua: String(42 + step * 2),
+						chest: 88 + step * 4,
+						sleeve: 58 + step,
+						length: 90 + step * 2,
+						position: step
 					}))
 				},
 				variants: {

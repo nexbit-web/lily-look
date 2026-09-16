@@ -13,7 +13,8 @@ const db = {
 
 vi.mock('./db.js', () => ({ db }));
 
-const { getProduct, listCategoryCards, listProducts, listSale } = await import('./catalog.js');
+const { getProduct, listCategoryCards, listCategoryProducts, listProducts, listSale } =
+	await import('./catalog.js');
 
 /** Рядок товару в тому вигляді, в якому його віддає Prisma. */
 const row = (patch: Record<string, unknown> = {}) => ({
@@ -229,5 +230,20 @@ describe('listCategoryCards', () => {
 			variants: { some: { isActive: true, stock: { gt: 0 } } }
 		});
 		expect(args.orderBy).toEqual([{ position: 'asc' }, { name: 'asc' }]);
+	});
+});
+
+describe('стрічка категорії на головній', () => {
+	it('бере тільки живі товари саме цієї категорії й не більше ліміту', async () => {
+		db.product.findMany.mockResolvedValue([row()]);
+
+		const cards = await listCategoryProducts('sukni', 8);
+
+		const args = db.product.findMany.mock.calls[0][0];
+		expect(args.where.category).toEqual({ slug: 'sukni' });
+		// Умова «товар живий» одна на весь каталог — вона має бути й тут.
+		expect(args.where.variants).toEqual({ some: { isActive: true, stock: { gt: 0 } } });
+		expect(args.take).toBe(8);
+		expect(cards[0].slug).toBe('suknia-olivia');
 	});
 });

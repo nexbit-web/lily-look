@@ -27,6 +27,7 @@ const product: ProductDetail = {
 	compareAt: 299_900,
 	category: { slug: 'sukni', name: 'Сукні' },
 	images: [{ url: 'https://cdn.test/1.jpg', alt: 'фото', color: null }],
+	measurements: [],
 	attributes: [
 		{ name: 'Склад', value: '95% віскоза, 5% еластан' },
 		{ name: 'Країна виробництва', value: 'Україна' }

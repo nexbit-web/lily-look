@@ -1,16 +1,21 @@
 <script lang="ts">
 	import { reveal } from '$lib/actions/reveal';
+	import { cn } from '$lib/utils';
 	import ArrowRightIcon from '@lucide/svelte/icons/arrow-right';
 	import type { Snippet } from 'svelte';
 
 	let {
 		eyebrow,
 		title,
+		titleId,
 		link,
 		children
 	}: {
-		eyebrow: string;
+		/** Надзаголовок. Без нього лишається сама назва — так у стрічках категорій. */
+		eyebrow?: string;
 		title: string;
+		/** Потрібен, коли секцію підписують через aria-labelledby. */
+		titleId?: string;
 		link?: { label: string; href: string };
 		children?: Snippet;
 	} = $props();
@@ -18,10 +23,14 @@
 
 <!-- Однаковий заголовок на всі блоки головної: очі не перебудовуються
      між секціями, і сторінка читається як одне ціле. -->
-<div class="mb-8 flex items-end justify-between gap-6" use:reveal>
+<div class="mb-6 flex items-end justify-between gap-6" use:reveal>
 	<div>
-		<p class="text-xs tracking-[0.2em] text-muted-foreground uppercase">{eyebrow}</p>
-		<h2 class="mt-2 font-heading text-3xl md:text-4xl">{title}</h2>
+		{#if eyebrow}
+			<p class="text-xs tracking-[0.2em] text-muted-foreground uppercase">{eyebrow}</p>
+		{/if}
+		<h2 id={titleId} class={cn('font-heading text-3xl md:text-4xl', eyebrow && 'mt-2')}>
+			{title}
+		</h2>
 		{#if children}
 			<p class="mt-2 max-w-md text-sm text-pretty text-muted-foreground">{@render children()}</p>
 		{/if}

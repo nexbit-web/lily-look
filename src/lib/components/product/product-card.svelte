@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { IMAGE_WIDTHS, imageSrcSet } from '$lib/image';
 	import { discountPercent, formatPrice } from '$lib/money';
 	import { plural } from '$lib/plural';
 	import type { ProductCard } from '$lib/types';
@@ -8,17 +9,48 @@
 	let { product, priority = false }: { product: ProductCard; priority?: boolean } = $props();
 
 	const discount = $derived(discountPercent(product.price, product.compareAt));
+
+	/**
+	 * Картка ніколи не ширша за половину телефона або чверть контейнера,
+	 * тож просити в CDN оригінал немає сенсу — браузер обере з `srcset`
+	 * найменший кадр, який не буде видно як мило.
+	 */
+	const SIZES = '(min-width: 1024px) 280px, 50vw';
+
+	/**
+	 * Поки фото не завантажилось, на його місці пульсує заглушка. Картки
+	 * нижче екрана тягнуть фото ліниво, і без заглушки там зяяла б сіра
+	 * пляма — незрозуміло, чи то вантажиться, чи то зламалось.
+	 */
+	let loaded = $state(false);
+	let cover = $state<HTMLImageElement>();
+
+	// Фото з кеша встигає завантажитись до гідратації, і `onload` по ньому
+	// вже не спрацює — такий кадр упізнаємо по `complete`.
+	$effect(() => {
+		if (cover?.complete) loaded = true;
+	});
 </script>
 
 <a href="/product/{product.slug}" class="group block">
 	<!-- На телефоні кадр вищий: у дві колонки річ видно дрібно, і зайва
 	     висота працює краще за зайві піксели ширини. -->
-	<div class="relative aspect-3/4 overflow-hidden rounded-sm bg-muted sm:aspect-4/5">
+	<div
+		class={cn(
+			'relative aspect-3/4 overflow-hidden rounded-sm bg-muted sm:aspect-4/5',
+			product.image && !loaded && 'animate-pulse'
+		)}
+	>
 		{#if product.image}
 			<img
+				bind:this={cover}
 				src={product.image.url}
+				srcset={imageSrcSet(product.image.url, IMAGE_WIDTHS.card)}
+				sizes={SIZES}
 				alt={product.image.alt}
 				loading={priority ? 'eager' : 'lazy'}
+				decoding="async"
+				onload={() => (loaded = true)}
 				class={cn(
 					'size-full object-cover transition-transform duration-700 ease-out motion-reduce:transition-none',
 					// Без другого фото картка не має чим відповісти на наведення —
@@ -33,6 +65,8 @@
 			     на середині переходу прозирав би фон картки. -->
 			<img
 				src={product.hoverImage.url}
+				srcset={imageSrcSet(product.hoverImage.url, IMAGE_WIDTHS.card)}
+				sizes={SIZES}
 				alt=""
 				aria-hidden="true"
 				loading="lazy"
