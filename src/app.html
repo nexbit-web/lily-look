@@ -4,6 +4,27 @@
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="text-scale" content="scale" />
+
+		<!--
+			Усі фото каталогу лежать на Cloudinary. Рукостискання з ним
+			(DNS, TLS) забирає кількасот мілісекунд, і без цього рядка вони
+			додаються до першого ж кадру. Тут воно відбувається одразу,
+			паралельно з розбором сторінки.
+		-->
+		<link rel="preconnect" href="https://res.cloudinary.com" crossorigin />
+		<link rel="dns-prefetch" href="https://res.cloudinary.com" />
+
+		<!--
+			Іконки лежать у `static/`, тому адреси в них незмінні — саме такі
+			браузери й пробують навмання (`/favicon.ico`, `/apple-touch-icon.png`),
+			а Vite їм імена не хешує. SVG беруть сучасні браузери, .ico (16/32/48)
+			лишається запасним для старих.
+		-->
+		<link rel="icon" href="/favicon.ico" sizes="32x32" />
+		<link rel="icon" href="/icon.svg" type="image/svg+xml" />
+		<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+		<link rel="manifest" href="/site.webmanifest" />
+		<meta name="theme-color" content="#ffffff" />
 		%sveltekit.head% %lily.jsonld%
 	</head>
 	<body data-sveltekit-preload-data="hover">

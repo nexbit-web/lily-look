@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { imageSrc, imageSrcSet } from './image.js';
+import { IMAGE_WIDTHS, imageSrc, imageSrcSet } from './image.js';
 
 /**
  * Фото в каталозі — чужі: їх заливає CRM, і оригінали бувають величезні.
@@ -36,6 +36,14 @@ describe('розмір фото', () => {
 
 		expect(imageSrc(url, 400)).toBe(url);
 		expect(imageSrcSet(url, [400, 800])).toBeUndefined();
+	});
+
+	it('на весь сайт лише три ширини — інакше CDN ріже кадри під кожну', () => {
+		const all = new Set(Object.values(IMAGE_WIDTHS).flat());
+
+		// Кожна зайва ширина — це окремий файл, який CDN виготовляє при
+		// першому запиті, і сіра пляма на місці фото, поки він це робить.
+		expect([...all].sort((a, b) => a - b)).toEqual([400, 800, 1600]);
 	});
 
 	it('srcset перелічує всі ширини', () => {

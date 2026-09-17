@@ -1,6 +1,7 @@
 import { RETURN_DAYS, SITE, SORT_OPTIONS, type SortOption } from '$lib/config';
 import { plural } from '$lib/plural';
 import { getCategory, listCategoryCards, listFacets, listProducts } from '$lib/server/catalog';
+import { searchProductIds } from '$lib/server/search';
 import { breadcrumbsNode, itemListNode } from '$lib/server/seo';
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
@@ -116,8 +117,13 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 		};
 	}
 
+	// Текстовий пошук іде через покажчик у пам'яті: він знаходить річ за
+	// іншим закінченням, кольором, категорією й навіть з опискою — чого
+	// `contains` по назві не вміє — і віддає результати за доречністю.
+	const ids = query ? await searchProductIds(query) : undefined;
+
 	const [result, facets] = await Promise.all([
-		listProducts({ categorySlug, sizes, colors, query, sale, sort, page }),
+		listProducts({ categorySlug, sizes, colors, query, sale, sort, page, ids }),
 		listFacets(categorySlug)
 	]);
 

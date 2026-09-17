@@ -34,7 +34,9 @@ export type CreateOrderResult =
  */
 export async function createOrder(
 	cookies: Cookies,
-	input: CheckoutInput
+	input: CheckoutInput,
+	/** Адреса сайту — з неї збирається посилання на замовлення для менеджера. */
+	origin?: string
 ): Promise<CreateOrderResult> {
 	const cart = await readCart(cookies);
 	if (cart.lines.length === 0) {
@@ -120,9 +122,11 @@ export async function createOrder(
 		});
 	}
 
-	// Сповіщення менеджерам. Всередині все загорнуто в try/catch —
-	// збій Telegram не має валити вже оплачене замовлення.
-	await notifyNewOrder({
+	// Сповіщення менеджерам свідомо не чекаємо. Замовлення вже в базі, і
+	// покупець не має дивитись на спінер, поки відповідає чужий API — а при
+	// збої ще й поки тривають повторні спроби. Помилки повідомлення гасить
+	// у собі й нічого не кидає.
+	void notifyNewOrder({
 		number: created.number,
 		customerName: input.customerName,
 		customerPhone: input.customerPhone,
@@ -134,7 +138,14 @@ export async function createOrder(
 		lines: cart.lines,
 		subtotal,
 		deliveryCost,
-		total: subtotal + deliveryCost
+		total: subtotal + deliveryCost,
+		payment: provider.label,
+		orderUrl: origin ? `${origin}/order/${created.number}` : null
+	}).catch((cause: unknown) => {
+		// `notifyNewOrder` гасить помилки в себе, тож сюди не потрапляють.
+		// Пояс поверх підтяжок: кинутий виняток у промісі без `await` став би
+		// unhandled rejection і поклав би процес на суворих налаштуваннях.
+		console.error('[telegram] сповіщення не пройшло', cause);
 	});
 
 	await clearCart(cookies);

@@ -159,6 +159,12 @@ describe('магазин і сайт', () => {
 		expect(node.currenciesAccepted).toBe('UAH');
 	});
 
+	it('логотип — абсолютне посилання: Google відносних не бере', () => {
+		const node = storeNode(ORIGIN) as Record<string, unknown>;
+
+		expect(node.logo).toBe(`${ORIGIN}/android-chrome-512x512.png`);
+	});
+
 	it('пошук по сайту описаний посиланням на каталог', () => {
 		const action = websiteNode(ORIGIN).potentialAction as {
 			target: { urlTemplate: string };

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { IMAGE_WIDTHS, imageSrc, imageSrcSet } from '$lib/image';
+	import { IMAGE_SMALL, IMAGE_WIDTHS, imageSrc, imageSrcSet } from '$lib/image';
 	import { Spinner } from '$lib/components/ui/spinner';
 	import { cn } from '$lib/utils';
 	import ChevronLeftIcon from '@lucide/svelte/icons/chevron-left';
@@ -299,7 +299,7 @@
 							)}
 						>
 							<img
-								src={imageSrc(image.url, 200)}
+								src={imageSrc(image.url, IMAGE_SMALL)}
 								alt=""
 								class="size-full object-cover"
 								loading="lazy"

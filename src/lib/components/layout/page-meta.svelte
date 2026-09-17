@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { imageSrc } from '$lib/image';
+	import { IMAGE_LARGE, imageSrc } from '$lib/image';
 	import { page } from '$app/state';
 	import { CURRENCY, SITE } from '$lib/config';
 
@@ -56,7 +56,7 @@
 	<meta property="og:description" content={description} />
 	<meta property="og:url" content={href} />
 	{#if image}
-		<meta property="og:image" content={imageSrc(image, 1200)} />
+		<meta property="og:image" content={imageSrc(image, IMAGE_LARGE)} />
 		{#if imageAlt}
 			<meta property="og:image:alt" content={imageAlt} />
 		{/if}

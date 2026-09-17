@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button';
-	import { IMAGE_WIDTHS, imageSrcSet } from '$lib/image';
+	import { IMAGE_WIDTHS, fallbackToOriginal, imageSrcSet } from '$lib/image';
 	import { cn } from '$lib/utils';
 	import ChevronLeftIcon from '@lucide/svelte/icons/chevron-left';
 	import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
@@ -106,6 +106,7 @@
 					loading={bannerIndex === 0 ? 'eager' : 'lazy'}
 					decoding={bannerIndex === 0 ? 'sync' : 'async'}
 					onload={() => (ready = true)}
+					onerror={(event) => banner.image && fallbackToOriginal(event, banner.image)}
 					class="size-full object-cover object-top"
 				/>
 			{/if}

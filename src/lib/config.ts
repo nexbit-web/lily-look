@@ -48,6 +48,13 @@ export const PRODUCTS_PER_PAGE = 12;
  */
 export const CATALOG_CACHE_MS = 60_000;
 
+/**
+ * Пошук. Підказки починаються з двох літер — на одній знаходиться пів
+ * каталогу, і запит на кожну натиснуту літеру був би марним.
+ */
+export const SEARCH_MIN_LENGTH = 2;
+export const SEARCH_SUGGESTIONS = 6;
+
 export const HOME_BLOCK_SIZE = 4;
 export const HOME_CATEGORY_LIMIT = 8;
 export const HOME_EAGER_SECTIONS = 2;

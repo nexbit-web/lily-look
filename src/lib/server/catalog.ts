@@ -1,4 +1,5 @@
 import { PRODUCTS_PER_PAGE, SIZE_ORDER, type SortOption } from '$lib/config';
+import type { SearchDoc } from '$lib/search';
 import type {
 	CatalogFacets,
 	CategoryCard,
@@ -23,6 +24,11 @@ export type CatalogFilters = {
 	sale?: boolean;
 	sort?: SortOption;
 	page?: number;
+	/**
+	 * Товари, які знайшов пошук, у порядку доречності. Якщо він заданий,
+	 * `query` уже відпрацьований — фільтрувати по тексту повторно не треба.
+	 */
+	ids?: string[];
 };
 
 /**
@@ -34,7 +40,7 @@ export type CatalogFilters = {
  */
 export const AVAILABLE_VARIANT = { isActive: true, stock: { gt: 0 } } as const;
 
-const VISIBLE_PRODUCT = {
+export const VISIBLE_PRODUCT = {
 	isActive: true,
 	variants: { some: AVAILABLE_VARIANT }
 } satisfies Prisma.ProductWhereInput;
@@ -77,7 +83,7 @@ function orderBy(sort: SortOption = 'new'): Prisma.ProductOrderByWithRelationInp
 }
 
 function buildWhere(filters: CatalogFilters): Prisma.ProductWhereInput {
-	const { categorySlug, sizes, colors, query, sale } = filters;
+	const { categorySlug, sizes, colors, query, sale, ids } = filters;
 
 	// Розмір і колір фільтруються по варіантах: товар підходить, якщо
 	// існує хоч один доступний варіант, що задовольняє всі обрані умови
@@ -94,7 +100,10 @@ function buildWhere(filters: CatalogFilters): Prisma.ProductWhereInput {
 		...(categorySlug ? { category: { slug: categorySlug } } : {}),
 		// Порівняння двох колонок — через field reference, а не сирий SQL.
 		...(sale ? { finalPrice: { lt: db.product.fields.price } } : {}),
-		...(search
+		// Пошук уже вибрав товари — його список точніший за `contains`
+		// по назві, тож текстову умову тут не дублюємо.
+		...(ids ? { id: { in: ids } } : {}),
+		...(!ids && search
 			? {
 					OR: [
 						{ name: { contains: search, mode: 'insensitive' as const } },
@@ -156,9 +165,31 @@ export async function getCategory(slug: string) {
 	});
 }
 
+const EMPTY_PAGE = { items: [] as ProductCard[], total: 0, page: 1, pageCount: 1 };
+
 export async function listProducts(filters: CatalogFilters) {
 	const page = Math.max(1, filters.page ?? 1);
+	if (filters.ids?.length === 0) return EMPTY_PAGE;
+
 	const where = buildWhere(filters);
+
+	// Порядок доречності не виражається в SQL, тож при пошуку сторінку
+	// відрізаємо в пам'яті. Вибірка обмежена знайденим, а не всім
+	// каталогом, тож це дешево. Явне сортування за ціною важливіше за
+	// доречність — його покупець обрав руками.
+	if (filters.ids && filters.sort !== 'price-asc' && filters.sort !== 'price-desc') {
+		const rows = await db.product.findMany({ where, select: CARD_SELECT });
+		const rank = new Map(filters.ids.map((id, position) => [id, position]));
+		rows.sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0));
+
+		const from = (page - 1) * PRODUCTS_PER_PAGE;
+		return {
+			items: rows.slice(from, from + PRODUCTS_PER_PAGE).map(toCard),
+			total: rows.length,
+			page,
+			pageCount: Math.max(1, Math.ceil(rows.length / PRODUCTS_PER_PAGE))
+		};
+	}
 
 	const [rows, total] = await Promise.all([
 		db.product.findMany({
@@ -227,6 +258,41 @@ export async function listCategoryProducts(slug: string, limit: number): Promise
 		take: limit
 	});
 	return rows.map(toCard);
+}
+
+/** Картка товару плюс текст, по якому його шукають. */
+export type SearchRow = { card: ProductCard; doc: SearchDoc };
+
+/**
+ * Увесь живий каталог одним запитом — сировина для покажчика пошуку.
+ *
+ * Пошук не ходить у базу на кожну натиснуту літеру: цей список читається
+ * раз і живе в пам'яті (`$lib/server/search`). Тому тут немає ні `take`,
+ * ні фільтрів — покажчик має бачити все, що можна купити.
+ */
+export async function listSearchRows(): Promise<SearchRow[]> {
+	const rows = await db.product.findMany({
+		where: VISIBLE_PRODUCT,
+		select: {
+			...CARD_SELECT,
+			description: true,
+			category: { select: { name: true } },
+			variants: { where: AVAILABLE_VARIANT, select: { color: true, stock: true, sku: true } }
+		},
+		// Порядок тут — лише запасний: видачу впорядковує вага збігу.
+		orderBy: { createdAt: 'desc' }
+	});
+
+	return rows.map((row) => ({
+		card: toCard(row),
+		doc: {
+			name: row.name,
+			category: row.category.name,
+			colors: [...new Set(row.variants.map((variant) => variant.color))],
+			skus: row.variants.map((variant) => variant.sku),
+			description: row.description
+		}
+	}));
 }
 
 /** Доступні розміри й кольори в межах категорії — для панелі фільтрів. */

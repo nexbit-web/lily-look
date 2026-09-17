@@ -18,7 +18,7 @@ export const load: PageServerLoad = async ({ cookies }) => {
 };
 
 export const actions: Actions = {
-	default: async ({ request, cookies }) => {
+	default: async ({ request, cookies, url }) => {
 		const form = await request.formData();
 		const values = Object.fromEntries(form) as Record<string, string>;
 
@@ -32,7 +32,7 @@ export const actions: Actions = {
 			return fail(400, { errors: deliveryErrors, values });
 		}
 
-		const result = await createOrder(cookies, parsed.data);
+		const result = await createOrder(cookies, parsed.data, url.origin);
 		if (!result.ok) {
 			return fail(400, { message: result.message, values });
 		}

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { IMAGE_WIDTHS, imageSrc, imageSrcSet } from '$lib/image';
+	import { IMAGE_SMALL, IMAGE_WIDTHS, fallbackToOriginal, imageSrc, imageSrcSet } from '$lib/image';
 	import Lightbox from '$lib/components/product/lightbox.svelte';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import type { ProductImageView } from '$lib/types';
@@ -96,7 +96,7 @@
 				preload.decoding = 'async';
 				// Та сама ширина, що й у галереї, — інакше прогрів тягнув би
 				// оригінал, який потім ніде не знадобиться.
-				preload.src = imageSrc(image.url, 900);
+				preload.src = imageSrc(image.url, 800);
 			}
 		};
 
@@ -234,7 +234,7 @@
 					)}
 				>
 					<img
-						src={imageSrc(image.url, 200)}
+						src={imageSrc(image.url, IMAGE_SMALL)}
 						alt=""
 						class="size-full object-cover"
 						loading="lazy"
@@ -270,6 +270,7 @@
 					loading={image.url === frames[0]?.url ? 'eager' : 'lazy'}
 					fetchpriority={image.url === frames[0]?.url ? 'high' : undefined}
 					onload={() => (shown[image.url] = true)}
+					onerror={(event) => fallbackToOriginal(event, image.url)}
 					class="size-full shrink-0 object-cover select-none"
 				/>
 			{/each}

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { IMAGE_WIDTHS, imageSrcSet } from '$lib/image';
+	import { IMAGE_WIDTHS, fallbackToOriginal, imageSrcSet } from '$lib/image';
 	import { discountPercent, formatPrice } from '$lib/money';
 	import { plural } from '$lib/plural';
 	import type { ProductCard } from '$lib/types';
@@ -24,6 +24,25 @@
 	 */
 	let loaded = $state(false);
 	let cover = $state<HTMLImageElement>();
+
+	/**
+	 * Друге фото має сенс лише там, де є курсор.
+	 *
+	 * На телефоні навести нічим, а кадр усе одно завантажувався — це вдвічі
+	 * більше фото на сітку задарма. CSS тут не допоможе: браузер тягне
+	 * `<img>` незалежно від того, чи його видно. Тому на дотикових екранах
+	 * його просто немає в розмітці — і на сервері теж, бо там про пристрій
+	 * нічого не відомо, а зайве фото дорожче за зайвий кадр після гідратації.
+	 */
+	// Свідомо `$state` з `$effect`, а не `$derived`: похідне значення
+	// порахувалось би вже під час першого малювання на клієнті, розійшлося б
+	// із HTML від сервера (де про `window` нічого не відомо) — і гідратація
+	// почалася б із розбіжності. Так значення просто змінюється після неї.
+	// eslint-disable-next-line svelte/prefer-writable-derived
+	let canHover = $state(false);
+	$effect(() => {
+		canHover = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+	});
 
 	// Фото з кеша встигає завантажитись до гідратації, і `onload` по ньому
 	// вже не спрацює — такий кадр упізнаємо по `complete`.
@@ -51,16 +70,23 @@
 				loading={priority ? 'eager' : 'lazy'}
 				decoding="async"
 				onload={() => (loaded = true)}
+				onerror={(event) => product.image && fallbackToOriginal(event, product.image.url)}
 				class={cn(
-					'size-full object-cover transition-transform duration-700 ease-out motion-reduce:transition-none',
+					// Прозорість і масштаб в одному переході: два окремих класи
+					// `transition-*` злилися б в один, і проявлення зникло б.
+					'size-full object-cover transition-[opacity,transform] duration-500 ease-out motion-reduce:transition-none',
+					// Кадр проявляється, а не стає ривком поверх заглушки. Фото
+					// першого екрана не гасимо: зайва анімація там лише
+					// відкладала б найбільший елемент сторінки.
+					!priority && !loaded && 'opacity-0',
 					// Без другого фото картка не має чим відповісти на наведення —
 					// тоді лишаємо легкий зум.
-					!product.hoverImage && 'group-hover:scale-105'
+					!(product.hoverImage && canHover) && 'group-hover:scale-105'
 				)}
 			/>
 		{/if}
 
-		{#if product.hoverImage}
+		{#if product.hoverImage && canHover}
 			<!-- Друге фото лежить зверху й проявляється. Перше не гасимо: інакше
 			     на середині переходу прозирав би фон картки. -->
 			<img

@@ -152,3 +152,51 @@ describe('createOrder', () => {
 		expect(db.$transaction).toHaveBeenCalledTimes(1);
 	});
 });
+
+describe('сповіщення менеджерам', () => {
+	it('передає все, що потрібно для наряду, і посилання на замовлення', async () => {
+		await createOrder(cookies, input, 'https://lilylook.store');
+
+		expect(notifyNewOrder).toHaveBeenCalledWith(
+			expect.objectContaining({
+				number: 'LL-ABC234',
+				customerName: 'Олена Коваль',
+				customerPhone: '+380671234567',
+				method: 'NOVA_POSHTA_BRANCH',
+				city: 'Одеса',
+				address: 'Відділення № 12',
+				lines: [line],
+				subtotal: 319_800,
+				total: 329_600,
+				payment: 'Оплата при отриманні',
+				orderUrl: 'https://lilylook.store/order/LL-ABC234'
+			})
+		);
+	});
+
+	it('без адреси сайту посилання просто немає', async () => {
+		await createOrder(cookies, input);
+
+		expect(notifyNewOrder.mock.calls[0][0].orderUrl).toBeNull();
+	});
+
+	it('покупця не тримаємо, поки відповідає Telegram', async () => {
+		// Повідомлення, яке ніколи не доїде: замовлення має завершитись однаково.
+		notifyNewOrder.mockReturnValue(new Promise(() => {}));
+
+		const result = await createOrder(cookies, input);
+
+		expect(result).toMatchObject({ ok: true });
+		expect(clearCart).toHaveBeenCalledWith(cookies);
+	});
+
+	it('Telegram зламався — замовлення все одно створене', async () => {
+		// Модуль гасить помилки в себе, але навіть якщо колись перестане —
+		// замовлення важливіше за повідомлення.
+		notifyNewOrder.mockRejectedValue(new Error('telegram down'));
+
+		const result = await createOrder(cookies, input);
+
+		expect(result).toMatchObject({ ok: true, number: 'LL-ABC234' });
+	});
+});

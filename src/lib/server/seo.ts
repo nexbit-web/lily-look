@@ -1,4 +1,4 @@
-import { imageSrc } from '$lib/image';
+import { IMAGE_LARGE, imageSrc } from '$lib/image';
 import { deliveryMethod, FREE_DELIVERY_FROM, RETURN_DAYS, SENDER, SITE } from '$lib/config';
 import type { ProductCard, ProductDetail } from '$lib/types';
 
@@ -41,6 +41,10 @@ export function storeNode(origin: string): JsonLdNode {
 		'@id': storeId(origin),
 		name: SITE.name,
 		url: `${origin}/`,
+		// Логотип магазину. Google бере його в панель знань і в картку бренда;
+		// без нього там лишається пустка або випадкова картинка зі сторінки.
+		logo: absolute(origin, '/android-chrome-512x512.png'),
+		image: absolute(origin, '/android-chrome-512x512.png'),
 		description: SITE.description,
 		email: SITE.email,
 		telephone: SITE.phone,
@@ -182,7 +186,7 @@ export function productNode(origin: string, product: ProductDetail): JsonLdNode 
 	const url = absolute(origin, `/product/${product.slug}`);
 	// Google хоче велике фото, але не оригінал на два мегабайти: у розмітку
 	// йде та сама ширина, що й у відкритому перегляді.
-	const images = product.images.map((image) => absolute(origin, imageSrc(image.url, 1200)));
+	const images = product.images.map((image) => absolute(origin, imageSrc(image.url, IMAGE_LARGE)));
 	const brand = { '@type': 'Brand', name: SITE.name };
 
 	const base = {

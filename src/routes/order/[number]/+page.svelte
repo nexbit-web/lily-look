@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { imageSrc } from '$lib/image';
+	import { IMAGE_SMALL, imageSrc } from '$lib/image';
 	import { Button } from '$lib/components/ui/button';
 	import { ORDER_STATUS_LABELS, SITE, deliveryMethod } from '$lib/config';
 	import { formatPrice } from '$lib/money';
@@ -64,7 +64,7 @@
 					>
 						{#if item.imageUrl}
 							<img
-								src={imageSrc(item.imageUrl, 192)}
+								src={imageSrc(item.imageUrl, IMAGE_SMALL)}
 								alt={item.productName}
 								class="size-full object-cover"
 							/>

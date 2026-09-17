@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { IMAGE_WIDTHS, imageSrcSet } from '$lib/image';
+	import { IMAGE_SMALL, imageSrc } from '$lib/image';
 	import { enhance } from '$app/forms';
 	import { Button } from '$lib/components/ui/button';
 	import { Skeleton } from '$lib/components/ui/skeleton';
@@ -126,9 +126,7 @@
 			{/if}
 			<img
 				bind:this={image}
-				src={line.imageUrl}
-				srcset={imageSrcSet(line.imageUrl, IMAGE_WIDTHS.thumb)}
-				sizes="96px"
+				src={imageSrc(line.imageUrl, IMAGE_SMALL)}
 				alt={line.productName}
 				loading="lazy"
 				decoding="async"

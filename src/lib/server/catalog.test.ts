@@ -247,3 +247,46 @@ describe('стрічка категорії на головній', () => {
 		expect(cards[0].slug).toBe('suknia-olivia');
 	});
 });
+
+describe('сторінка результатів пошуку', () => {
+	it('порядок доречності зберігається, а сторінка ріжеться в пам’яті', async () => {
+		// База віддає в довільному порядку — правильний порядок задає пошук.
+		db.product.findMany.mockResolvedValue([row({ id: 'b' }), row({ id: 'a' })]);
+
+		const result = await listProducts({ ids: ['a', 'b'] });
+
+		expect(result.items.map((item) => item.id)).toEqual(['a', 'b']);
+		expect(result.total).toBe(2);
+		// Окремий count не потрібен: усе знайдене вже в пам’яті.
+		expect(db.product.count).not.toHaveBeenCalled();
+	});
+
+	it('шукає лише серед знайденого, а текстову умову не дублює', async () => {
+		db.product.findMany.mockResolvedValue([]);
+
+		await listProducts({ ids: ['a'], query: 'сукня' });
+
+		const where = db.product.findMany.mock.calls[0][0].where;
+		expect(where.id).toEqual({ in: ['a'] });
+		expect(where.OR).toBeUndefined();
+	});
+
+	it('пошук нічого не знайшов — у базу не ходимо зовсім', async () => {
+		const result = await listProducts({ ids: [] });
+
+		expect(result.items).toEqual([]);
+		expect(result.total).toBe(0);
+		expect(db.product.findMany).not.toHaveBeenCalled();
+	});
+
+	it('явне сортування за ціною важливіше за доречність', async () => {
+		db.product.findMany.mockResolvedValue([row()]);
+		db.product.count.mockResolvedValue(1);
+
+		await listProducts({ ids: ['a'], sort: 'price-asc' });
+
+		// Сортує база, тож сторінку вона ж і ріже.
+		expect(db.product.findMany.mock.calls[0][0].orderBy).toEqual({ finalPrice: 'asc' });
+		expect(db.product.count).toHaveBeenCalled();
+	});
+});

@@ -2,7 +2,6 @@
 	// Стилі nprogress не імпортуємо — фірмова смужка описана в app.css.
 	import '../app.css';
 	import { navigating } from '$app/state';
-	import favicon from '$lib/assets/favicon.svg';
 	import Footer from '$lib/components/layout/footer.svelte';
 	import Header from '$lib/components/layout/header.svelte';
 	import nprogress from 'nprogress';
@@ -44,10 +43,6 @@
 		};
 	});
 </script>
-
-<svelte:head>
-	<link rel="icon" href={favicon} />
-</svelte:head>
 
 <div class="flex min-h-screen flex-col">
 	<Header categories={data.categories} cartCount={data.cartCount} />
