@@ -40,7 +40,8 @@ const product: ProductDetail = {
 			color: 'Чорний',
 			colorHex: '#000',
 			price: 219_900,
-			stock: 3
+			stock: 3,
+			position: 0
 		},
 		{
 			id: 'v2',
@@ -49,7 +50,8 @@ const product: ProductDetail = {
 			color: 'Чорний',
 			colorHex: '#000',
 			price: 219_900,
-			stock: 0
+			stock: 0,
+			position: 1
 		}
 	]
 };

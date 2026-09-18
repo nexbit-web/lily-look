@@ -415,12 +415,17 @@ async function main() {
 					}))
 				},
 				variants: {
-					create: product.colors.flatMap((color) =>
-						product.sizes.map((size) => ({
+					// `position` — те, що в бойовій базі проставляє CRM: порядок
+					// кольорів і розмірів на сторінці товару. Тут нумеруємо в тому
+					// ж порядку, в якому вони перелічені вище, — кольорами, а
+					// всередині кольору за шкалою розмірів.
+					create: product.colors.flatMap((color, colorStep) =>
+						product.sizes.map((size, sizeStep) => ({
 							sku: `${product.slug}-${size}-${color.name}`.toUpperCase().replace(/\s+/g, '-'),
 							size,
 							color: color.name,
 							colorHex: color.hex,
+							position: colorStep * product.sizes.length + sizeStep,
 							stock: stockFor(variantCounter++)
 						}))
 					)

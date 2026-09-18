@@ -181,11 +181,52 @@ describe('наявність', () => {
 		expect(product?.attributes).toEqual([{ name: 'Склад', value: '95% віскоза' }]);
 	});
 
+	/**
+	 * Порядок кольорів і розмірів задає менеджер у CRM, і живе він у
+	 * `ProductVariant.position`. Без цієї сортировки база віддавала б
+	 * рядки як їй зручно, а сайт показав би кольори абеткою — «Білий»
+	 * попереду «Чорного», хоча в CRM задано навпаки.
+	 */
+	it('варіанти беруться в порядку, заданому в CRM', async () => {
+		db.product.findFirst.mockResolvedValue({
+			...row(),
+			description: 'опис',
+			category: { slug: 'sukni', name: 'Сукні' },
+			variants: []
+		});
+
+		await getProduct('suknia-olivia');
+		const select = db.product.findFirst.mock.calls[0][0].select;
+
+		expect(select.variants.orderBy[0]).toEqual({ position: 'asc' });
+		// Позиція доїжджає до сторінки: списки розмірів і кольорів
+		// збираються з варіантів уже в браузері.
+		expect(select.variants.select.position).toBe(true);
+	});
+
 	it('вимкненого в CRM товару немає навіть за прямим посиланням', async () => {
 		db.product.findFirst.mockResolvedValue(null);
 
 		expect(await getProduct('suknia-olivia')).toBeNull();
 		expect(db.product.findFirst.mock.calls[0][0].where).toMatchObject({ isActive: true });
+	});
+});
+
+describe('картка товару', () => {
+	/**
+	 * На картці кольори — це крапки під фото. Їх порядок так само не
+	 * наш: його задає менеджер, і в списку категорії він має збігатися
+	 * з тим, що покупець побачить на сторінці товару.
+	 */
+	it('кольори на картці беруться в порядку, заданому в CRM', async () => {
+		db.product.findMany.mockResolvedValue([row()]);
+		db.product.count.mockResolvedValue(1);
+
+		await listProducts({});
+
+		expect(db.product.findMany.mock.calls[0][0].select.variants.orderBy[0]).toEqual({
+			position: 'asc'
+		});
 	});
 });
 

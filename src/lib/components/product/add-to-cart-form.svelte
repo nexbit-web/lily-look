@@ -31,22 +31,70 @@
 	/** Нижче цієї межі показуємо, скільки лишилось — це підштовхує до рішення. */
 	const LOW_STOCK = 3;
 
-	// Унікальні кольори в порядку появи — варіантів на товар одиниці,
-	// тож findIndex дешевший за додаткову структуру даних.
-	const colors = $derived(
-		product.variants
-			.filter(
-				(variant, index) =>
-					product.variants.findIndex((other) => other.color === variant.color) === index
-			)
-			.map((variant) => ({ name: variant.color, hex: variant.colorHex }))
-	);
+	/**
+	 * Порядок розмірів і кольорів задає менеджер у CRM — він лежить у
+	 * `variant.position`. Взяти його напряму не вийде: варіант — це пара
+	 * «колір + розмір», а списки на сторінці окремі.
+	 *
+	 * Ускладнює те, що CRM нумерує варіанти суцільним рядом, і з нього не
+	 * видно, що йде зовнішнім циклом — кольори чи розміри. Тому кольорам
+	 * беремо найменшу позицію (вона вірна за будь-якої нумерації), а
+	 * розмірам — не позицію, а місце всередині свого кольору: і при
+	 * «Чорний XS, S, M → Білий XS, S, M», і при «XS чорний, XS білий → S…»
+	 * воно виходить однакове.
+	 *
+	 * Шкала розмірів і абетка лишились запасним ключем — на випадок, коли
+	 * порядок у CRM ще не проставили: колонка створена з DEFAULT 0, і тоді
+	 * позиції нульові у всіх.
+	 */
+	function rank(size: string): number {
+		const index = (SIZE_ORDER as readonly string[]).indexOf(size);
+		// Те, чого немає в шкалі («One size», числові 38–54), — у хвіст.
+		return index === -1 ? SIZE_ORDER.length : index;
+	}
+
+	function bySize(a: string, b: string): number {
+		return rank(a) - rank(b) || a.localeCompare(b, 'uk', { numeric: true });
+	}
+
+	// Звичайні об'єкти, а не SvelteMap: це проміжні підрахунки всередині
+	// $derived, реактивність їм не потрібна.
+	const byColor = $derived.by(() => {
+		const groups: Record<string, ProductDetail['variants']> = {};
+		for (const variant of product.variants) {
+			(groups[variant.color] ??= []).push(variant);
+		}
+		return groups;
+	});
+
+	const colors = $derived.by(() => {
+		const lowest: Record<string, number> = {};
+		const hex: Record<string, string | null> = {};
+
+		for (const [color, variants] of Object.entries(byColor)) {
+			lowest[color] = Math.min(...variants.map((variant) => variant.position));
+			hex[color] = variants.find((variant) => variant.colorHex)?.colorHex ?? null;
+		}
+
+		return Object.keys(lowest)
+			.sort((a, b) => lowest[a] - lowest[b] || a.localeCompare(b, 'uk'))
+			.map((name) => ({ name, hex: hex[name] }));
+	});
 
 	const sizes = $derived.by(() => {
-		const order = SIZE_ORDER as readonly string[];
-		return [...new Set(product.variants.map((variant) => variant.size))].sort(
-			(a, b) => order.indexOf(a) - order.indexOf(b)
-		);
+		const place: Record<string, number> = {};
+
+		for (const variants of Object.values(byColor)) {
+			[...variants]
+				.sort((a, b) => a.position - b.position || bySize(a.size, b.size))
+				.forEach((variant, index) => {
+					if (place[variant.size] === undefined || index < place[variant.size]) {
+						place[variant.size] = index;
+					}
+				});
+		}
+
+		return Object.keys(place).sort((a, b) => place[a] - place[b] || bySize(a, b));
 	});
 
 	// Початковий колір беремо один раз: подальші зміни `product` означають
@@ -213,7 +261,7 @@
 				<legend class="text-xs tracking-[0.15em] uppercase">
 					Колір: <span class="text-muted-foreground">{selectedColor}</span>
 				</legend>
-				<div class="flex flex-wrap gap-2.5">
+				<div data-slot="color-options" class="flex flex-wrap gap-2.5">
 					{#each colors as color (color.name)}
 						{@const active = selectedColor === color.name}
 						<button
@@ -255,7 +303,7 @@
 				{:else}
 					<!-- Сітка, а не flex-wrap: кнопки однакової ширини читаються
 					     як один блок, а не як розсипаний набір. -->
-					<div class="grid grid-cols-4 gap-2 sm:grid-cols-5">
+					<div data-slot="size-options" class="grid grid-cols-4 gap-2 sm:grid-cols-5">
 						{#each sizes as size (size)}
 							{@const variant = variantFor(selectedColor, size)}
 							{@const available = (variant?.stock ?? 0) > 0}

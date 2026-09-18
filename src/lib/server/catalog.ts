@@ -45,6 +45,21 @@ export const VISIBLE_PRODUCT = {
 	variants: { some: AVAILABLE_VARIANT }
 } satisfies Prisma.ProductWhereInput;
 
+/**
+ * У якому порядку показувати розміри й кольори.
+ *
+ * Головне тут — `position`: його проставляє менеджер у CRM, і це єдине
+ * місце, де відомо, що «Чорний» має стояти перед «Білим», а розміри йдуть
+ * шкалою, а не абеткою. Назви лишились запасним ключем: поки CRM не
+ * проставила порядок, у всіх варіантів нуль, і без них рядки поверталися б
+ * щоразу в іншій послідовності — сайт би тасував кольори між заходами.
+ */
+const VARIANT_ORDER = [
+	{ position: 'asc' },
+	{ color: 'asc' },
+	{ size: 'asc' }
+] satisfies Prisma.ProductVariantOrderByWithRelationInput[];
+
 const CARD_SELECT = {
 	id: true,
 	slug: true,
@@ -53,7 +68,11 @@ const CARD_SELECT = {
 	finalPrice: true,
 	// Два фото: перше — обкладинка, друге проявляється при наведенні.
 	images: { select: { url: true, alt: true }, orderBy: { position: 'asc' }, take: 2 },
-	variants: { where: AVAILABLE_VARIANT, select: { color: true, stock: true } }
+	variants: {
+		where: AVAILABLE_VARIANT,
+		select: { color: true, stock: true },
+		orderBy: VARIANT_ORDER
+	}
 } satisfies Prisma.ProductSelect;
 
 type CardRow = Prisma.ProductGetPayload<{ select: typeof CARD_SELECT }>;
@@ -392,9 +411,10 @@ export async function getProduct(slug: string): Promise<ProductDetail | null> {
 					color: true,
 					colorHex: true,
 					finalPrice: true,
-					stock: true
+					stock: true,
+					position: true
 				},
-				orderBy: [{ color: 'asc' }, { size: 'asc' }]
+				orderBy: VARIANT_ORDER
 			}
 		}
 	});
@@ -428,7 +448,8 @@ export async function getProduct(slug: string): Promise<ProductDetail | null> {
 			colorHex: variant.colorHex,
 			// Варіант може мати власну ціну; якщо ні — успадковує ціну товару.
 			price: variant.finalPrice ?? row.finalPrice,
-			stock: variant.stock
+			stock: variant.stock,
+			position: variant.position
 		}))
 	};
 }
@@ -469,7 +490,14 @@ export async function listRecommended(product: ProductDetail, limit = 4): Promis
 			...CARD_SELECT,
 			isFeatured: true,
 			category: { select: { slug: true } },
-			variants: { where: AVAILABLE_VARIANT, select: { color: true, size: true, stock: true } }
+			// Перекриває `variants` із CARD_SELECT — тут потрібен ще й розмір,
+			// для скорингу. Порядок доводиться повторювати: без нього крапки
+			// кольорів на цих картках стояли б не так, як у списку категорії.
+			variants: {
+				where: AVAILABLE_VARIANT,
+				select: { color: true, size: true, stock: true },
+				orderBy: VARIANT_ORDER
+			}
 		},
 		// Пул обмежений: ранжувати всю базу в пам'яті не потрібно й дорого.
 		orderBy: { createdAt: 'desc' },

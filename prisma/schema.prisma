@@ -165,12 +165,18 @@ model ProductVariant {
   stock      Int     @default(0)
   /// Вимикач конкретного розміру/кольору в CRM.
   isActive   Boolean @default(true)
+  /// Порядок, у якому варіанти показує сайт; його задає менеджер у CRM.
+  /// Розміри йдуть шкалою (XS → S → M → L → XL…, далі числовий ряд
+  /// 38–54), кольори — як вирішив менеджер. Нуль у всіх варіантів
+  /// означає, що порядок ще не проставили: тоді сортуємо за назвою.
+  position   Int     @default(0)
 
   cartItems CartItem[]
 
   @@unique([productId, size, color])
   @@index([productId])
   @@index([productId, isActive, stock])
+  @@index([productId, position])
 }
 
 // ─── Знижки ─────────────────────────────────────────────────────────────────

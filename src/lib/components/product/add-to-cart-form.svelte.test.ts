@@ -19,6 +19,7 @@ const variant = (patch: Partial<ProductDetail['variants'][number]>) => ({
 	colorHex: '#e8c9c9',
 	price: 264_900,
 	stock: 5,
+	position: 0,
 	...patch
 });
 
@@ -33,11 +34,13 @@ const product: ProductDetail = {
 	images: [{ url: 'https://example.test/1.jpg', alt: 'фото', color: null }],
 	measurements: [],
 	attributes: [],
+	// Порядок такий, як його нумерує CRM: спершу всі розміри одного
+	// кольору, потім наступний колір.
 	variants: [
 		variant({}),
-		variant({ id: 'v-m-pudra', size: 'M', stock: 2 }),
-		variant({ id: 'v-l-pudra', size: 'L', stock: 0 }),
-		variant({ id: 'v-s-zelen', color: 'Зелений', colorHex: '#14532d', stock: 0 })
+		variant({ id: 'v-m-pudra', size: 'M', stock: 2, position: 1 }),
+		variant({ id: 'v-l-pudra', size: 'L', stock: 0, position: 2 }),
+		variant({ id: 'v-s-zelen', color: 'Зелений', colorHex: '#14532d', stock: 0, position: 3 })
 	]
 };
 
@@ -182,6 +185,92 @@ describe('форма купівлі', () => {
 		});
 
 		expect(screen.getByText('Отримаєте 10–12 вересня')).toBeInTheDocument();
+	});
+});
+
+/**
+ * Порядок розмірів і кольорів задає менеджер у CRM (`variant.position`),
+ * і сайт не має права його перетасовувати. Абетка тут завжди не та:
+ * «Білий» став би перед «Чорним», а «L» перед «S».
+ */
+describe('порядок, заданий у CRM', () => {
+	const names = (slot: 'color-options' | 'size-options') =>
+		[...document.querySelectorAll(`[data-slot="${slot}"] button`)].map((button) =>
+			button.textContent?.trim()
+		);
+
+	it('кольори йдуть за position, а не за абеткою', () => {
+		render(AddToCartForm, {
+			product: {
+				...product,
+				variants: [
+					variant({ id: 'v-chornyi', color: 'Чорний', colorHex: '#000', position: 0 }),
+					variant({ id: 'v-bilyi', color: 'Білий', colorHex: '#fff', position: 1 })
+				]
+			}
+		});
+
+		expect(names('color-options')).toEqual(['Чорний', 'Білий']);
+	});
+
+	it('розміри йдуть за position, а не за абеткою', () => {
+		render(AddToCartForm, {
+			product: {
+				...product,
+				variants: [
+					variant({ id: 'v-s', size: 'S', position: 0 }),
+					variant({ id: 'v-m', size: 'M', position: 1 }),
+					variant({ id: 'v-l', size: 'L', position: 2 })
+				]
+			}
+		});
+
+		expect(names('size-options')).toEqual(['S', 'M', 'L']);
+	});
+
+	/**
+	 * CRM нумерує варіанти кольорами: спершу всі розміри чорного, потім
+	 * білого. Якщо брати позицію першої зустрічі розміру, то XS, якого в
+	 * чорному немає, поїхав би в кінець списку — після L. Тому беремо
+	 * найменшу позицію серед усіх варіантів цього розміру.
+	 */
+	it('розмір, якого немає в першому кольорі, не з’їжджає в кінець', () => {
+		render(AddToCartForm, {
+			product: {
+				...product,
+				variants: [
+					variant({ id: 'v-ch-s', color: 'Чорний', size: 'S', position: 0 }),
+					variant({ id: 'v-ch-m', color: 'Чорний', size: 'M', position: 1 }),
+					variant({ id: 'v-ch-l', color: 'Чорний', size: 'L', position: 2 }),
+					variant({ id: 'v-bi-xs', color: 'Білий', size: 'XS', position: 3 }),
+					variant({ id: 'v-bi-s', color: 'Білий', size: 'S', position: 4 }),
+					variant({ id: 'v-bi-m', color: 'Білий', size: 'M', position: 5 }),
+					variant({ id: 'v-bi-l', color: 'Білий', size: 'L', position: 6 })
+				]
+			}
+		});
+
+		expect(names('size-options')).toEqual(['XS', 'S', 'M', 'L']);
+	});
+
+	/**
+	 * Колонка з'явилась із DEFAULT 0, і поки CRM не проставила порядок,
+	 * він нульовий у всіх. Список не має від цього розсипатись.
+	 */
+	it('порядок ще не проставили — розміри лишаються шкалою', () => {
+		render(AddToCartForm, {
+			product: {
+				...product,
+				variants: [
+					variant({ id: 'v-l', size: 'L' }),
+					variant({ id: 'v-xs', size: 'XS' }),
+					variant({ id: 'v-m', size: 'M' }),
+					variant({ id: 'v-s', size: 'S' })
+				]
+			}
+		});
+
+		expect(names('size-options')).toEqual(['XS', 'S', 'M', 'L']);
 	});
 });
 
