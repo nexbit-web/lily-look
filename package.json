@@ -21,7 +21,8 @@
 		"db:push": "prisma db push",
 		"db:seed": "prisma db seed",
 		"db:studio": "prisma studio",
-		"telegram:check": "tsx scripts/telegram-check.ts"
+		"telegram:check": "tsx scripts/telegram-check.ts",
+		"telegram:webhook": "tsx scripts/telegram-webhook.ts"
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",

@@ -5,6 +5,7 @@ import { clearCart, readCart } from './cart.js';
 import { db } from './db.js';
 import { resolveDeliveryCost } from './delivery-cost.js';
 import { DEFAULT_PAYMENT_PROVIDER, getPaymentProvider } from './payments.js';
+import { dispatchOrder } from './bot/orders.js';
 import { notifyNewOrder } from './telegram.js';
 
 /** Символи без 0/O/1/I — щоб номер можна було продиктувати телефоном. */
@@ -146,6 +147,13 @@ export async function createOrder(
 		// Пояс поверх підтяжок: кинутий виняток у промісі без `await` став би
 		// unhandled rejection і поклав би процес на суворих налаштуваннях.
 		console.error('[telegram] сповіщення не пройшло', cause);
+	});
+
+	// Те саме замовлення — персонально кожному, у кого є доступ до бота,
+	// але вже з кнопками. Теж не чекаємо: розсилка ходить у Telegram по
+	// разу на менеджера, і покупцеві нема чого на це дивитись.
+	void dispatchOrder(created.number, origin ?? null).catch((cause: unknown) => {
+		console.error('[bot] розсилка менеджерам не пройшла', cause);
 	});
 
 	await clearCart(cookies);

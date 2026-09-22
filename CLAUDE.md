@@ -49,6 +49,8 @@ npm run db:studio      # GUI к базе
 | Корзина                       | `src/lib/server/cart.ts`     |
 | Оформление заказа             | `src/lib/server/orders.ts`   |
 | Подключение провайдера оплаты | `src/lib/server/payments.ts` |
+| Телеграм-бот менеджеров       | `src/lib/server/bot/`        |
+| Правила статусов заказа       | `src/lib/bot-workflow.ts`    |
 | Доставка, размеры, сортировки | `src/lib/config.ts`          |
 | Валидация форм                | `src/lib/schemas.ts`         |
 | Схема БД                      | `prisma/schema.prisma`       |

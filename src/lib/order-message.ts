@@ -39,6 +39,11 @@ export type OrderMessage = {
 	payment: string;
 	/** Посилання на замовлення на сайті. Немає — рядка не буде. */
 	orderUrl?: string | null;
+	/**
+	 * Стан замовлення рядком: «Відправлене · Олена, 17 вересня 15:42».
+	 * Його показує бот менеджерам; у першому сповіщенні його немає.
+	 */
+	status?: string | null;
 	/** Час замовлення; передається окремо, щоб формат можна було перевірити. */
 	now?: Date;
 };
@@ -96,7 +101,8 @@ export function buildOrderMessage(order: OrderMessage): string {
 
 	const head = [
 		`<b>Замовлення ${escapeHtml(order.number)}</b>`,
-		`${escapeHtml(SITE.name)} · ${escapeHtml(moment)}`
+		`${escapeHtml(SITE.name)} · ${escapeHtml(moment)}`,
+		...(order.status ? [escapeHtml(order.status)] : [])
 	];
 
 	const body = [

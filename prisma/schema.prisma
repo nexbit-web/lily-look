@@ -315,7 +315,10 @@ model Order {
   /// Ідентифікатор транзакції у провайдера.
   paymentRef      String?
 
-  items OrderItem[]
+  items   OrderItem[]
+  events  OrderEvent[]
+  /// Повідомлення про це замовлення, надіслані в Telegram.
+  notices BotNotice[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -345,4 +348,126 @@ model OrderItem {
   quantity  Int
 
   @@index([orderId])
+}
+
+// ─── Телеграм-бот для менеджерів ────────────────────────────────────────────
+
+/// Що людині дозволено робити із замовленнями в боті.
+enum BotRole {
+  /// Веде замовлення від «нове» до «відправлено», може скасувати.
+  MANAGER
+  /// Тільки доставка: бачить відправлені й позначає отримані.
+  COURIER
+}
+
+/// Людина, якій видано доступ до бота.
+///
+/// Рядок зʼявляється не з CRM, а в мить, коли людина надіслала боту свій
+/// код: тільки тоді стає відомий її telegram id. CRM створює `BotInvite`,
+/// бот створює `BotUser`.
+model BotUser {
+  id String @id @default(cuid())
+
+  /// Telegram user id. BigInt — вони давно вийшли за межі Int.
+  /// Підробити його не можна: він приходить у підписаному вебхуці.
+  telegramId BigInt  @unique
+  /// Особистий чат із ботом — туди падають замовлення й кнопки.
+  chatId     BigInt
+  /// Імʼя з Telegram на момент привʼязки — для журналу й списку в CRM.
+  name       String
+  username   String?
+
+  role     BotRole @default(MANAGER)
+  /// Вимикач доступу з CRM. Знятий прапорець діє з наступного дотику:
+  /// ні кнопка, ні команда більше не спрацюють.
+  isActive Boolean @default(true)
+
+  invite  BotInvite?
+  events  OrderEvent[]
+  notices BotNotice[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+}
+
+/// Одноразовий код доступу. Створює CRM, гасить бот.
+///
+/// Сенс саме в одноразовості: код можна спокійно передати в месенджері,
+/// бо після першого використання він мертвий, а до використання не дає
+/// нічого. Telegram id наперед знати не треба — людина приносить його сама.
+model BotInvite {
+  id String @id @default(cuid())
+
+  /// Те, що людина надсилає боту: `/start <code>`.
+  code String  @unique
+  role BotRole @default(MANAGER)
+  /// Кому призначено — щоб у CRM було видно, кого чекаємо.
+  note String?
+
+  /// Порожньо — код безстроковий.
+  expiresAt DateTime?
+  /// Заповнюється в мить використання. NULL — код ще живий.
+  usedAt    DateTime?
+  usedById  String?   @unique
+  usedBy    BotUser?  @relation(fields: [usedById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([usedAt])
+}
+
+/// Хто і коли міняв статус замовлення.
+///
+/// Саме звідси CRM бере історію. `Order.status` лишається актуальним
+/// зрізом, щоб не збирати його щоразу з подій.
+model OrderEvent {
+  id      String @id @default(cuid())
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  status  OrderStatus
+  /// Хто змінив. NULL — зміна прийшла не з бота (CRM, сам сайт).
+  actorId String?
+  actor   BotUser?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  note    String?
+
+  createdAt DateTime @default(now())
+
+  @@index([orderId, createdAt])
+}
+
+/// Надіслане в Telegram повідомлення про замовлення.
+///
+/// Потрібне, щоб після зміни статусу переписати всі копії: замовлення
+/// їде кільком менеджерам, і в решти воно інакше лишилось би з кнопками
+/// від стану, якого вже немає.
+model BotNotice {
+  id      String @id @default(cuid())
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  botUserId String?
+  botUser   BotUser? @relation(fields: [botUserId], references: [id], onDelete: Cascade)
+
+  chatId    BigInt
+  messageId BigInt
+
+  createdAt DateTime @default(now())
+
+  @@unique([orderId, chatId])
+  @@index([orderId])
+}
+
+/// Оброблені апдейти Telegram — щоб повтор не спрацював двічі.
+///
+/// Telegram перешле подію, якщо не отримав 200 вчасно, а холодний старт
+/// хостингу — саме той випадок. Без цієї таблиці одне натискання могло б
+/// перевести замовлення через два стани.
+model BotUpdate {
+  updateId  BigInt   @id
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
 }
