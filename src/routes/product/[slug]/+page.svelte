@@ -8,6 +8,7 @@
 	import { RETURN_DAYS, SITE } from '$lib/config';
 	import { formatPrice } from '$lib/money';
 	import { plural } from '$lib/plural';
+	import { framesForColor } from '$lib/product-images';
 	import { modelSku } from '$lib/sku';
 	import { summarize } from '$lib/summary';
 	import ArrowRightIcon from '@lucide/svelte/icons/arrow-right';
@@ -16,7 +17,6 @@
 	let { data }: PageProps = $props();
 
 	const product = $derived(data.product);
-	const cover = $derived(product.images[0]?.url ?? '');
 	// Опис для видачі: перше речення товару плюс те, що вирішує покупця
 	// на місці — ціна й умови доставки. 90 символів на опис — щоб уся
 	// стрічка вклалась у ті ~160, які Google показує без обрізання.
@@ -37,14 +37,21 @@
 			? picked
 			: (product.variants[0]?.color ?? null)
 	);
+
+	/**
+	 * Кадр для превʼю посилання й og:image. Береться так само, як обкладинка
+	 * картки в каталозі, — з кадрів доступного кольору. Інакше в шері
+	 * висіла б чорна куртка, якої вже немає на складі.
+	 */
+	const cover = $derived(framesForColor(product.images, galleryColor)[0] ?? product.images[0]);
 </script>
 
 <PageMeta
 	title="{product.name} — купити в Україні | {SITE.name}"
 	description={metaDescription}
 	canonical="/product/{product.slug}"
-	image={cover || null}
-	imageAlt={product.images[0]?.alt ?? product.name}
+	image={cover?.url ?? null}
+	imageAlt={cover?.alt ?? product.name}
 	type="product"
 	price={product.price}
 />

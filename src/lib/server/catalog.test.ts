@@ -24,8 +24,8 @@ const row = (patch: Record<string, unknown> = {}) => ({
 	price: 299_900,
 	finalPrice: 219_900,
 	images: [
-		{ url: 'https://example.test/1.jpg', alt: null },
-		{ url: 'https://example.test/2.jpg', alt: 'ззаду' }
+		{ url: 'https://example.test/1.jpg', alt: null, color: null },
+		{ url: 'https://example.test/2.jpg', alt: 'ззаду', color: null }
 	],
 	variants: [{ color: 'Чорний', stock: 3 }],
 	attributes: [],
@@ -213,6 +213,57 @@ describe('наявність', () => {
 });
 
 describe('картка товару', () => {
+	/**
+	 * Точний випадок із бойової бази: «Сукня-міді Amélie» має п'ять чорних
+	 * кадрів і п'ять білих, чорний розібрали. Обкладинкою має стати білий
+	 * кадр — той самий колір, який відкриється за кліком по картці.
+	 */
+	it('обкладинка — колір, який є в наявності, а не перше фото товару', async () => {
+		db.product.findMany.mockResolvedValue([
+			row({
+				images: [
+					{ url: 'ch-1.jpg', alt: null, color: 'Чорний' },
+					{ url: 'ch-2.jpg', alt: null, color: 'Чорний' },
+					{ url: 'bi-1.jpg', alt: null, color: 'Білий' },
+					{ url: 'bi-2.jpg', alt: null, color: 'Білий' }
+				],
+				// Чорного в наявності немає, тож до картки він не доїжджає.
+				variants: [{ color: 'Білий', stock: 10 }]
+			})
+		]);
+		db.product.count.mockResolvedValue(1);
+
+		const { items } = await listProducts({});
+
+		expect(items[0].image?.url).toBe('bi-1.jpg');
+		expect(items[0].hoverImage?.url).toBe('bi-2.jpg');
+	});
+
+	it('колір у фото не проставлений — обкладинкою лишається перше фото', async () => {
+		db.product.findMany.mockResolvedValue([row()]);
+		db.product.count.mockResolvedValue(1);
+
+		const { items } = await listProducts({});
+
+		expect(items[0].image?.url).toBe('https://example.test/1.jpg');
+		expect(items[0].hoverImage?.url).toBe('https://example.test/2.jpg');
+	});
+
+	it('усе розібрали — картка все одно з фото, а не порожня', async () => {
+		db.product.findMany.mockResolvedValue([
+			row({
+				images: [{ url: 'ch-1.jpg', alt: null, color: 'Чорний' }],
+				variants: []
+			})
+		]);
+		db.product.count.mockResolvedValue(1);
+
+		const { items } = await listProducts({});
+
+		expect(items[0].image?.url).toBe('ch-1.jpg');
+		expect(items[0].inStock).toBe(false);
+	});
+
 	/**
 	 * На картці кольори — це крапки під фото. Їх порядок так само не
 	 * наш: його задає менеджер, і в списку категорії він має збігатися

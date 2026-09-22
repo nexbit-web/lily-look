@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { IMAGE_SMALL, IMAGE_WIDTHS, fallbackToOriginal, imageSrc, imageSrcSet } from '$lib/image';
 	import Lightbox from '$lib/components/product/lightbox.svelte';
+	import { framesForColor } from '$lib/product-images';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import type { ProductImageView } from '$lib/types';
 	import { cn } from '$lib/utils';
@@ -38,22 +39,8 @@
 	let index = $state(0);
 	let lightboxOpen = $state(false);
 
-	/**
-	 * Кадри обраного кольору плюс спільні (ті, у яких колір не вказаний, —
-	 * крій, тканина зблизька).
-	 *
-	 * Якщо власних кадрів у кольору немає жодного, показуємо весь набір
-	 * товару: це означає, що в CRM колір ще не розмітили, і краще дати
-	 * покупцеві всі фото, ніж єдину тканину зблизька.
-	 */
-	const frames = $derived.by(() => {
-		if (!color) return images;
-
-		const own = images.filter((image) => image.color === color);
-		if (own.length === 0) return images;
-
-		return images.filter((image) => image.color === color || image.color === null);
-	});
+	/** Правило спільне з обкладинками карток — див. `$lib/product-images`. */
+	const frames = $derived(framesForColor(images, color));
 
 	const active = $derived(frames[index]);
 	const many = $derived(frames.length > 1);

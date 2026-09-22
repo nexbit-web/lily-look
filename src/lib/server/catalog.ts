@@ -1,4 +1,5 @@
 import { PRODUCTS_PER_PAGE, SIZE_ORDER, type SortOption } from '$lib/config';
+import { framesForColor } from '$lib/product-images';
 import type { SearchDoc } from '$lib/search';
 import type {
 	CatalogFacets,
@@ -66,8 +67,10 @@ const CARD_SELECT = {
 	name: true,
 	price: true,
 	finalPrice: true,
-	// Два фото: перше — обкладинка, друге проявляється при наведенні.
-	images: { select: { url: true, alt: true }, orderBy: { position: 'asc' }, take: 2 },
+	// Без `take`: які саме два кадри потрібні, видно лише після того, як
+	// стане відомий перший доступний колір, — а це вже сусіднє поле.
+	// Фото на товар одиниці, тож зайві рядки тут нічого не коштують.
+	images: { select: { url: true, alt: true, color: true }, orderBy: { position: 'asc' } },
 	variants: {
 		where: AVAILABLE_VARIANT,
 		select: { color: true, stock: true },
@@ -78,7 +81,16 @@ const CARD_SELECT = {
 type CardRow = Prisma.ProductGetPayload<{ select: typeof CARD_SELECT }>;
 
 function toCard(row: CardRow): ProductCard {
-	const [image, hoverImage] = row.images;
+	/**
+	 * Обкладинка має бути того кольору, який покупець і отримає.
+	 *
+	 * Варіанти вже відфільтровані по наявності й упорядковані, тож перший
+	 * з них — саме той колір, який відкриється за кліком по картці.
+	 * Брати просто перше фото товару не можна: коли чорний розібрали, на
+	 * картці лишалась чорна куртка, а на сторінці відкривалась біла.
+	 */
+	const color = row.variants[0]?.color ?? null;
+	const [image, hoverImage] = framesForColor(row.images, color);
 	return {
 		id: row.id,
 		slug: row.slug,

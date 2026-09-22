@@ -1,4 +1,5 @@
 import { IMAGE_LARGE, imageSrc } from '$lib/image';
+import { framesForColor } from '$lib/product-images';
 import { deliveryMethod, FREE_DELIVERY_FROM, RETURN_DAYS, SENDER, SITE } from '$lib/config';
 import type { ProductCard, ProductDetail } from '$lib/types';
 
@@ -184,9 +185,15 @@ function schemaAttributes(product: ProductDetail): Record<string, string> {
 
 export function productNode(origin: string, product: ProductDetail): JsonLdNode {
 	const url = absolute(origin, `/product/${product.slug}`);
+	// Порядок важливий: Google бере в картку перше фото, а перше має бути
+	// того кольору, який реально можна купити. Решту кадрів лишаємо —
+	// зайвий ракурс у розмітці не шкодить, а от чорна куртка в картці,
+	// коли чорну розібрали, шкодить прямо.
+	const preferred = framesForColor(product.images, product.variants[0]?.color ?? null);
+	const ordered = [...preferred, ...product.images.filter((image) => !preferred.includes(image))];
 	// Google хоче велике фото, але не оригінал на два мегабайти: у розмітку
 	// йде та сама ширина, що й у відкритому перегляді.
-	const images = product.images.map((image) => absolute(origin, imageSrc(image.url, IMAGE_LARGE)));
+	const images = ordered.map((image) => absolute(origin, imageSrc(image.url, IMAGE_LARGE)));
 	const brand = { '@type': 'Brand', name: SITE.name };
 
 	const base = {

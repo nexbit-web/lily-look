@@ -149,6 +149,25 @@ describe('товар', () => {
 		expect(node.url).toBe(`${ORIGIN}/product/suknia-olivia`);
 		expect(node.image).toEqual([`${ORIGIN}/uploads/1.jpg`]);
 	});
+
+	/**
+	 * Google бере в картку перше фото зі списку. Якщо чорний розібрали,
+	 * першим має стояти білий кадр — той самий, що й на картці товару
+	 * в каталозі, і той, що відкриється за кліком.
+	 */
+	it('першим іде фото кольору, який є в наявності', () => {
+		const node = productNode(ORIGIN, {
+			...product,
+			// У варіантах лишився тільки білий: чорний відсіявся по залишку.
+			variants: [{ ...product.variants[0], id: 'v-bi', color: 'Білий' }],
+			images: [
+				{ url: '/ch-1.jpg', alt: '', color: 'Чорний' },
+				{ url: '/bi-1.jpg', alt: '', color: 'Білий' }
+			]
+		}) as Record<string, unknown>;
+
+		expect(node.image).toEqual([`${ORIGIN}/bi-1.jpg`, `${ORIGIN}/ch-1.jpg`]);
+	});
 });
 
 describe('магазин і сайт', () => {
