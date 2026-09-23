@@ -10,8 +10,11 @@ import { ORDER_STATUS_LABELS } from '$lib/config';
 
 export type OrderStatusValue = keyof typeof ORDER_STATUS_LABELS;
 
-/** Що людині дозволено робити із замовленнями. */
-export type BotRoleValue = 'MANAGER' | 'COURIER';
+/** Що людині дозволено робити. */
+export type BotRoleValue = 'ADMIN' | 'MANAGER' | 'COURIER';
+
+/** Хто веде замовлення. Адмін уміє все те саме плюс звіти й доступи. */
+const KEEPERS: BotRoleValue[] = ['ADMIN', 'MANAGER'];
 
 export type Action = {
 	/** Куди переводимо. */
@@ -23,21 +26,28 @@ export type Action = {
 };
 
 /**
+ * Скасування — єдина дія, яку не відмотати, тож воно має читатись інакше,
+ * ніж решта. Кольору кнопок Telegram не дає взагалі, тому лишається знак
+ * у написі й окремий рядок.
+ */
+const CANCEL = '✕ Скасувати';
+
+/**
  * Дозволені переходи. Кур'єр бачить тільки останній крок: його справа —
  * довезти й відзначити, а не скасовувати чужі замовлення.
  */
 const FLOW: Record<OrderStatusValue, Action[]> = {
 	NEW: [
-		{ to: 'CONFIRMED', label: 'Прийняти', roles: ['MANAGER'] },
-		{ to: 'CANCELLED', label: 'Скасувати', roles: ['MANAGER'] }
+		{ to: 'CONFIRMED', label: 'Прийняти', roles: KEEPERS },
+		{ to: 'CANCELLED', label: CANCEL, roles: KEEPERS }
 	],
 	CONFIRMED: [
-		{ to: 'SHIPPED', label: 'Відправлено', roles: ['MANAGER'] },
-		{ to: 'CANCELLED', label: 'Скасувати', roles: ['MANAGER'] }
+		{ to: 'SHIPPED', label: 'Відправлено', roles: KEEPERS },
+		{ to: 'CANCELLED', label: CANCEL, roles: KEEPERS }
 	],
 	SHIPPED: [
-		{ to: 'DELIVERED', label: 'Отримано', roles: ['MANAGER', 'COURIER'] },
-		{ to: 'CANCELLED', label: 'Скасувати', roles: ['MANAGER'] }
+		{ to: 'DELIVERED', label: 'Отримано', roles: ['ADMIN', 'MANAGER', 'COURIER'] },
+		{ to: 'CANCELLED', label: CANCEL, roles: KEEPERS }
 	],
 	// Далі рухати нікуди: замовлення закрите.
 	DELIVERED: [],
@@ -46,6 +56,11 @@ const FLOW: Record<OrderStatusValue, Action[]> = {
 
 export function statusLabel(status: OrderStatusValue): string {
 	return ORDER_STATUS_LABELS[status];
+}
+
+/** Чи має роль право на звіти й видачу доступів. */
+export function isAdmin(role: BotRoleValue): boolean {
+	return role === 'ADMIN';
 }
 
 /** Що ця людина може зробити із замовленням у цьому стані. */
@@ -80,20 +95,19 @@ export function decodeAction(data: string): { number: string; to: OrderStatusVal
 	return { number, to: to as OrderStatusValue };
 }
 
+/**
+ * Кнопки стовпчиком, по одній у рядку.
+ *
+ * У рядок вони стають вузькими, і на телефоні «Відправлено» та
+ * «Скасувати» опиняються за пів сантиметра одна від одної — а ціна
+ * промаху різна. Стовпчик ширший і промахнутись важче.
+ */
 export function keyboardFor(
 	number: string,
 	status: OrderStatusValue,
 	role: BotRoleValue
 ): { text: string; callback_data: string }[][] {
-	const actions = actionsFor(status, role);
-	if (actions.length === 0) return [];
-
-	// Один ряд: кнопок максимум дві, і в рядок вони читаються краще,
-	// ніж стовпчиком під повідомленням на пів екрана.
-	return [
-		actions.map((action) => ({
-			text: action.label,
-			callback_data: encodeAction(number, action.to)
-		}))
-	];
+	return actionsFor(status, role).map((action) => [
+		{ text: action.label, callback_data: encodeAction(number, action.to) }
+	]);
 }

@@ -9,14 +9,28 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  */
 
 const db = {
-	botUser: { findFirst: vi.fn(), findUnique: vi.fn(), findMany: vi.fn(), create: vi.fn() },
-	botInvite: { findUnique: vi.fn(), updateMany: vi.fn(), update: vi.fn() },
-	botUpdate: { create: vi.fn() }
+	botUser: {
+		findFirst: vi.fn(),
+		findUnique: vi.fn(),
+		findMany: vi.fn(),
+		create: vi.fn(),
+		update: vi.fn()
+	},
+	botInvite: { findUnique: vi.fn(), updateMany: vi.fn(), update: vi.fn(), create: vi.fn() },
+	botUpdate: { create: vi.fn(), deleteMany: vi.fn() }
 };
 
 vi.mock('../db.js', () => ({ db }));
 
-const { alreadyHandled, findActor, redeemInvite } = await import('./access.js');
+const {
+	alreadyHandled,
+	createInvite,
+	findActor,
+	generateCode,
+	prunePastUpdates,
+	redeemInvite,
+	setAccess
+} = await import('./access.js');
 
 const profile = {
 	telegramId: 777n,
@@ -42,6 +56,9 @@ beforeEach(() => {
 	db.botInvite.updateMany.mockResolvedValue({ count: 1 });
 	db.botUser.create.mockResolvedValue(user);
 	db.botInvite.update.mockResolvedValue({});
+	db.botInvite.create.mockResolvedValue({});
+	db.botUser.update.mockResolvedValue({});
+	db.botUpdate.deleteMany.mockResolvedValue({ count: 0 });
 });
 
 const invite = (patch: Record<string, unknown> = {}) => ({
@@ -147,5 +164,94 @@ describe('повтори від Telegram', () => {
 		// Первинний ключ не дасть вставити той самий апдейт удруге.
 		db.botUpdate.create.mockRejectedValueOnce(new Error('duplicate key'));
 		await expect(alreadyHandled(10n)).resolves.toBe(true);
+	});
+});
+
+describe('підбір коду', () => {
+	/**
+	 * Код — шість символів із мільярда варіантів, але лічильник спроб
+	 * робить перебір безглуздим одразу. Головне тут — що відкинута спроба
+	 * не коштує жодного запиту в базу.
+	 */
+	it('після пʼяти помилок бот перестає навіть дивитись у базу', async () => {
+		db.botInvite.findUnique.mockResolvedValue(null);
+		const attacker = { ...profile, telegramId: 9001n };
+
+		for (let attempt = 0; attempt < 5; attempt += 1) {
+			await expect(redeemInvite('WRONG', attacker)).resolves.toEqual({
+				ok: false,
+				why: 'unknown'
+			});
+		}
+
+		const lookups = db.botInvite.findUnique.mock.calls.length;
+		await expect(redeemInvite('WRONG', attacker)).resolves.toEqual({
+			ok: false,
+			why: 'throttled'
+		});
+		expect(db.botInvite.findUnique.mock.calls.length).toBe(lookups);
+	});
+
+	it('лічильник свій у кожного — сусіда він не блокує', async () => {
+		db.botInvite.findUnique.mockResolvedValue(null);
+		const attacker = { ...profile, telegramId: 9002n };
+		for (let attempt = 0; attempt < 6; attempt += 1) await redeemInvite('WRONG', attacker);
+
+		db.botInvite.findUnique.mockResolvedValue(invite());
+		await expect(redeemInvite('GOOD', { ...profile, telegramId: 9003n })).resolves.toMatchObject({
+			ok: true
+		});
+	});
+});
+
+describe('видача доступу власником', () => {
+	it('код читається вголос: без 0/O/1/I', () => {
+		for (let attempt = 0; attempt < 50; attempt += 1) {
+			expect(generateCode()).toMatch(/^LILY-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6}$/);
+		}
+	});
+
+	it('коди не повторюються', () => {
+		const seen = new Set(Array.from({ length: 200 }, () => generateCode()));
+		expect(seen.size).toBe(200);
+	});
+
+	it('код створюється з роллю й терміном', async () => {
+		const code = await createInvite('COURIER', 'Ігор', 7);
+
+		const data = db.botInvite.create.mock.calls[0][0].data;
+		expect(data.code).toBe(code);
+		expect(data.role).toBe('COURIER');
+		expect(data.expiresAt).toBeInstanceOf(Date);
+	});
+
+	it('нуль днів — код безстроковий', async () => {
+		await createInvite('MANAGER', null, 0);
+
+		expect(db.botInvite.create.mock.calls[0][0].data.expiresAt).toBeNull();
+	});
+
+	it('доступ закривається й відкривається за telegram id', async () => {
+		db.botUser.findUnique.mockResolvedValue({ id: 'u1', name: 'Ігор' });
+
+		await expect(setAccess(777n, false)).resolves.toEqual({ name: 'Ігор' });
+		expect(db.botUser.update.mock.calls[0][0].data).toEqual({ isActive: false });
+	});
+
+	it('невідомий id нічого не міняє', async () => {
+		db.botUser.findUnique.mockResolvedValue(null);
+
+		await expect(setAccess(777n, false)).resolves.toBeNull();
+		expect(db.botUser.update).not.toHaveBeenCalled();
+	});
+});
+
+describe('прибирання', () => {
+	it('старі записи про апдейти видаляються, свіжі лишаються', async () => {
+		db.botUpdate.deleteMany.mockResolvedValue({ count: 12 });
+
+		await expect(prunePastUpdates()).resolves.toBe(12);
+		const cutoff = db.botUpdate.deleteMany.mock.calls[0][0].where.createdAt.lt as Date;
+		expect(Date.now() - cutoff.getTime()).toBeGreaterThanOrEqual(24 * 60 * 60 * 1000 - 1000);
 	});
 });

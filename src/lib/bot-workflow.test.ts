@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { actionsFor, canMove, decodeAction, encodeAction, keyboardFor } from './bot-workflow';
+import {
+	actionsFor,
+	canMove,
+	decodeAction,
+	encodeAction,
+	isAdmin,
+	keyboardFor
+} from './bot-workflow';
 
 /**
  * Правила руху замовлення.
@@ -68,7 +75,47 @@ describe('дані кнопки', () => {
 	});
 });
 
+describe('власник', () => {
+	it('уміє все те саме, що й менеджер', () => {
+		expect(actionsFor('NEW', 'ADMIN').map((action) => action.to)).toEqual([
+			'CONFIRMED',
+			'CANCELLED'
+		]);
+		expect(canMove('CONFIRMED', 'SHIPPED', 'ADMIN')).toBe(true);
+	});
+
+	it('звіти й доступи — тільки йому', () => {
+		expect(isAdmin('ADMIN')).toBe(true);
+		expect(isAdmin('MANAGER')).toBe(false);
+		expect(isAdmin('COURIER')).toBe(false);
+	});
+});
+
 describe('клавіатура', () => {
+	/**
+	 * Кнопки стовпчиком, а не в рядок: у рядок вони вузькі, і на телефоні
+	 * «Відправлено» опиняється впритул до «Скасувати», а ціна промаху різна.
+	 */
+	it('кожна кнопка у своєму рядку', () => {
+		const rows = keyboardFor('LL-ABC234', 'NEW', 'MANAGER');
+
+		expect(rows).toHaveLength(2);
+		for (const row of rows) expect(row).toHaveLength(1);
+	});
+
+	/**
+	 * Кольору кнопок Telegram не дає взагалі, тож єдине, чим скасування
+	 * відрізняється від решти, — знак у написі.
+	 */
+	it('скасування помічене знаком і йде останнім', () => {
+		const rows = keyboardFor('LL-ABC234', 'CONFIRMED', 'MANAGER');
+		const last = rows[rows.length - 1][0];
+
+		expect(last.text).toContain('Скасувати');
+		expect(last.text).not.toBe('Скасувати');
+		expect(decodeAction(last.callback_data)?.to).toBe('CANCELLED');
+	});
+
 	it("кур'єру не малюється те, чого він не може", () => {
 		const keys = keyboardFor('LL-ABC234', 'SHIPPED', 'COURIER').flat();
 
@@ -86,7 +133,7 @@ describe('клавіатура', () => {
 	 */
 	it('кожна намальована кнопка проходить перевірку сервера', () => {
 		const statuses = ['NEW', 'CONFIRMED', 'SHIPPED', 'DELIVERED', 'CANCELLED'] as const;
-		const roles = ['MANAGER', 'COURIER'] as const;
+		const roles = ['ADMIN', 'MANAGER', 'COURIER'] as const;
 
 		for (const status of statuses) {
 			for (const role of roles) {

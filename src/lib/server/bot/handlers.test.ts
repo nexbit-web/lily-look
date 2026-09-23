@@ -8,7 +8,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * суха відповідь, і жодного запиту в базу замовлень.
  */
 
-const access = { findActor: vi.fn(), redeemInvite: vi.fn() };
+const access = {
+	findActor: vi.fn(),
+	redeemInvite: vi.fn(),
+	createInvite: vi.fn(),
+	listAccess: vi.fn(),
+	setAccess: vi.fn()
+};
+const reports = { buildReport: vi.fn() };
 const api = { sendMessage: vi.fn(), answerCallback: vi.fn() };
 const orders = {
 	activeOrders: vi.fn(),
@@ -20,6 +27,7 @@ const orders = {
 vi.mock('./access.js', () => access);
 vi.mock('./api.js', () => api);
 vi.mock('./orders.js', () => orders);
+vi.mock('./reports.js', () => reports);
 
 const { handleUpdate } = await import('./handlers.js');
 
@@ -47,13 +55,19 @@ const press = (data: string) => ({
 const said = () => api.sendMessage.mock.calls.map((call) => String(call[1])).join('\n');
 
 beforeEach(() => {
-	for (const group of [access, api, orders]) {
+	for (const group of [access, api, orders, reports]) {
 		for (const fn of Object.values(group)) fn.mockReset();
 	}
 	api.sendMessage.mockResolvedValue({ ok: true, result: { message_id: 5 } });
 	access.findActor.mockResolvedValue(actor);
 	orders.activeOrders.mockResolvedValue([]);
+	reports.buildReport.mockResolvedValue('<b>Звіт</b>');
+	access.listAccess.mockResolvedValue([]);
+	access.createInvite.mockResolvedValue('LILY-AAAAAA');
+	access.setAccess.mockResolvedValue({ name: 'Ігор' });
 });
+
+const admin = { ...actor, role: 'ADMIN' as const };
 
 describe('чужий не дізнається нічого', () => {
 	it('команда від невідомого — сухе «доступу немає» й жодного запиту до замовлень', async () => {
@@ -164,5 +178,113 @@ describe('стійкість', () => {
 		await handleUpdate({ update_id: 3 }, null);
 
 		expect(api.sendMessage).not.toHaveBeenCalled();
+	});
+});
+
+describe('тільки особистий чат', () => {
+	/**
+	 * Найдорожча з можливих помилок: якби `/start` спрацював у групі,
+	 * `chat.id` там — це група, доступ привʼязався б до неї, і всі
+	 * замовлення магазину поїхали б у чат, де сидить хто завгодно.
+	 */
+	it('у групі бот мовчить і коду не гасить', async () => {
+		const update = {
+			update_id: 7,
+			message: { chat: { id: -100123, type: 'supergroup' }, from, text: '/start LILY-AAAAAA' }
+		};
+
+		await handleUpdate(update, null);
+
+		expect(access.redeemInvite).not.toHaveBeenCalled();
+		expect(api.sendMessage).not.toHaveBeenCalled();
+	});
+
+	it('у групі не відповідає навіть своєму', async () => {
+		const update = {
+			update_id: 8,
+			message: { chat: { id: -100123, type: 'group' }, from, text: '/zamovlennia' }
+		};
+
+		await handleUpdate(update, null);
+
+		expect(orders.activeOrders).not.toHaveBeenCalled();
+		expect(api.sendMessage).not.toHaveBeenCalled();
+	});
+});
+
+describe('права власника', () => {
+	it('звіт показується власнику', async () => {
+		access.findActor.mockResolvedValue(admin);
+
+		await handleUpdate(message('/zvit'), null);
+
+		expect(reports.buildReport).toHaveBeenCalled();
+		expect(said()).toContain('Звіт');
+	});
+
+	/**
+	 * Менеджеру команда не просто забороняється, а й не згадується: відповідь
+	 * «вам це недоступно» вже повідомляє, що звіт десь існує.
+	 */
+	it('менеджеру звіт не рахується й про нього не згадується', async () => {
+		await handleUpdate(message('/zvit'), null);
+
+		expect(reports.buildReport).not.toHaveBeenCalled();
+		expect(said()).not.toContain('zvit');
+		expect(said()).toContain('/zamovlennia');
+	});
+
+	it('менеджер не може ні видати код, ні закрити доступ', async () => {
+		await handleUpdate(message('/kod ADMIN я головний'), null);
+		await handleUpdate(message('/vymknuty 777'), null);
+
+		expect(access.createInvite).not.toHaveBeenCalled();
+		expect(access.setAccess).not.toHaveBeenCalled();
+	});
+
+	it('власник видає код із роллю', async () => {
+		access.findActor.mockResolvedValue(admin);
+
+		await handleUpdate(message('/kod COURIER Ігор на авто'), null);
+
+		expect(access.createInvite).toHaveBeenCalledWith('COURIER', 'Ігор на авто');
+		expect(said()).toContain('LILY-AAAAAA');
+	});
+
+	it('вигадана роль кода не створює', async () => {
+		access.findActor.mockResolvedValue(admin);
+
+		await handleUpdate(message('/kod BOSS хтось'), null);
+
+		expect(access.createInvite).not.toHaveBeenCalled();
+	});
+
+	it('власник закриває доступ за id', async () => {
+		access.findActor.mockResolvedValue(admin);
+
+		await handleUpdate(message('/vymknuty 999'), null);
+
+		expect(access.setAccess).toHaveBeenCalledWith(999n, false);
+	});
+
+	/**
+	 * Інакше власник замикає сам себе назовні: відкрити доступ назад буде
+	 * нікому, бо це вміє тільки власник.
+	 */
+	it('себе вимкнути не можна', async () => {
+		access.findActor.mockResolvedValue(admin);
+
+		await handleUpdate(message(`/vymknuty ${admin.telegramId}`), null);
+
+		expect(access.setAccess).not.toHaveBeenCalled();
+		expect(said()).toContain('Себе вимкнути не можна');
+	});
+
+	it('сміття замість id нічого не міняє', async () => {
+		access.findActor.mockResolvedValue(admin);
+
+		await handleUpdate(message('/vymknuty; DROP TABLE'), null);
+
+		expect(access.setAccess).not.toHaveBeenCalled();
 	});
 });

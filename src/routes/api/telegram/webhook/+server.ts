@@ -1,5 +1,5 @@
 import { env } from '$env/dynamic/private';
-import { alreadyHandled } from '$lib/server/bot/access';
+import { alreadyHandled, prunePastUpdates } from '$lib/server/bot/access';
 import { handleUpdate, type Update } from '$lib/server/bot/handlers';
 import type { RequestHandler } from './$types';
 
@@ -51,6 +51,15 @@ export const POST: RequestHandler = async ({ request, url }) => {
 	// Повтор тієї самої події не має спрацювати двічі: холодний старт
 	// хостингу — рівно той випадок, коли Telegram не дочекався й переслав.
 	if (await alreadyHandled(BigInt(update.update_id))) return new Response('ok');
+
+	// Зрідка прибираємо старі записи про оброблені апдейти. Окремого
+	// планувальника заради однієї таблиці заводити не варто, а раз на
+	// кілька сотень подій — це приблизно раз на день при реальному потоці.
+	if (update.update_id % 500 === 0) {
+		void prunePastUpdates().catch((cause: unknown) => {
+			console.error('[bot] не вдалося прибрати старі апдейти', cause);
+		});
+	}
 
 	await handleUpdate(update, url.origin);
 
