@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	actionsFor,
 	canMove,
+	closesOrder,
 	decodeAction,
 	encodeAction,
 	isAdmin,
@@ -143,6 +144,34 @@ describe('клавіатура', () => {
 					expect(canMove(status, action!.to, role)).toBe(true);
 				}
 			}
+		}
+	});
+});
+
+describe('закрите замовлення', () => {
+	it('отримане й скасоване — закриті', () => {
+		expect(closesOrder('DELIVERED')).toBe(true);
+		expect(closesOrder('CANCELLED')).toBe(true);
+	});
+
+	/** Відправлене ще чекає на відмітку про доставку — картка потрібна. */
+	it('усе, по чому ще щось роблять, — не закрите', () => {
+		expect(closesOrder('NEW')).toBe(false);
+		expect(closesOrder('CONFIRMED')).toBe(false);
+		expect(closesOrder('SHIPPED')).toBe(false);
+	});
+
+	/**
+	 * Закрите — це стан без жодної дії. Якби список закритих вели окремо,
+	 * він рано чи пізно розійшовся б із таблицею переходів.
+	 */
+	it('закрите — це рівно те, з чого нікуди не рухаються', () => {
+		const statuses = ['NEW', 'CONFIRMED', 'SHIPPED', 'DELIVERED', 'CANCELLED'] as const;
+		const roles = ['ADMIN', 'MANAGER', 'COURIER'] as const;
+
+		for (const status of statuses) {
+			const movable = roles.some((role) => actionsFor(status, role).length > 0);
+			expect(closesOrder(status)).toBe(!movable);
 		}
 	});
 });

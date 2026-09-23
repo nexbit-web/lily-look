@@ -199,6 +199,23 @@ export async function editMessage(
 }
 
 /**
+ * Прибрати повідомлення з чату.
+ *
+ * Telegram дозволяє боту видаляти власні повідомлення лише перші 48 годин.
+ * Замовлення, яке закрили пізніше, видалити вже не вийде — тому той, хто
+ * викликає, має бути готовий до відмови й мати запасний хід.
+ */
+export async function deleteMessage(
+	chatId: bigint | number | string,
+	messageId: bigint | number
+): Promise<TelegramCall<unknown>> {
+	return callTelegram('deleteMessage', {
+		chat_id: String(chatId),
+		message_id: Number(messageId)
+	});
+}
+
+/**
  * Відповідь на натискання кнопки.
  *
  * Telegram чекає її близько 15 секунд, інакше в менеджера крутиться

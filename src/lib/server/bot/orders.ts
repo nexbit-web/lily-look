@@ -1,18 +1,19 @@
 import {
 	canMove,
 	canRoleEver,
+	closesOrder,
 	keyboardFor,
 	statusLabel,
 	type BotRoleValue,
 	type OrderStatusValue
 } from '$lib/bot/workflow';
-import { buildOrderMessage, type OrderMessage } from '$lib/bot/order-message';
+import { buildOrderMessage, escapeHtml, type OrderMessage } from '$lib/bot/order-message';
 import type { DeliveryMethodValue } from '$lib/config';
 import { db } from '../db.js';
 import { getPaymentProvider } from '../payments.js';
 import type { Actor } from './access.js';
 import { activeRecipients } from './access.js';
-import { editMessage, sendMessage } from './api.js';
+import { deleteMessage, editMessage, sendMessage } from './api.js';
 
 /**
  * Замовлення очима менеджера: картка в Telegram і зміна її стану.
@@ -196,6 +197,57 @@ async function refreshNotices(order: OrderCard, origin: string | null): Promise<
 	}
 }
 
+/**
+ * Прибрати закрите замовлення з чатів.
+ *
+ * Отримане або скасоване замовлення вже нічого не чекає від менеджера,
+ * а картка про нього лишається в чаті назавжди й забиває собою живі. Тому
+ * після закриття повідомлення зникає.
+ *
+ * На історії це ніяк не позначається: хто і коли що змінював, лежить у
+ * `OrderEvent`, а `BotNotice` памʼятає лише, де саме лежить повідомлення, —
+ * без повідомлення цей рядок уже ні про що.
+ *
+ * Запасний хід потрібен через Telegram: власні повідомлення бот може
+ * видаляти лише перші 48 годин. Замовлення, закрите пізніше, згортається
+ * в один рядок без кнопок: це краще, ніж повна картка з кнопками від стану,
+ * якого вже немає.
+ */
+async function closeNotices(order: OrderCard): Promise<void> {
+	const notices = await db.botNotice.findMany({
+		where: { orderId: order.id },
+		select: { chatId: true, messageId: true }
+	});
+
+	for (const notice of notices) {
+		const gone = await deleteMessage(notice.chatId, notice.messageId);
+		if (gone.ok) continue;
+
+		await editMessage(
+			notice.chatId,
+			notice.messageId,
+			`<code>${escapeHtml(order.number)}</code> · ${escapeHtml(statusLabel(order.status as OrderStatusValue))}`
+		);
+	}
+
+	// Рядки прибираємо в будь-якому разі: перемальовувати тут уже нічого,
+	// а таблиця інакше ростиме разом із кожним закритим замовленням.
+	await db.botNotice.deleteMany({ where: { orderId: order.id } });
+}
+
+/**
+ * Привести чати до переданого стану: живе замовлення перемальовуємо,
+ * закрите — прибираємо. Єдине місце, де це вирішується.
+ */
+async function syncNotices(order: OrderCard, origin: string | null): Promise<void> {
+	if (closesOrder(order.status as OrderStatusValue)) {
+		await closeNotices(order);
+		return;
+	}
+
+	await refreshNotices(order, origin);
+}
+
 export type Applied =
 	| { ok: true; status: OrderStatusValue }
 	/** Стан уже інший: хтось устиг раніше або кнопка зі старого повідомлення. */
@@ -236,8 +288,9 @@ export async function applyStatus(
 		// Такого цій ролі не можна ніколи — отже, кнопка не наша.
 		if (!canRoleEver(to, actor.role)) return { ok: false, why: 'forbidden', status: from };
 
-		// Кнопка справжня, просто стан уже інший: доганяємо CRM.
-		await refreshNotices(order, origin);
+		// Кнопка справжня, просто стан уже інший: доганяємо CRM. Якщо
+		// замовлення там закрили — картка не оновлюється, а зникає.
+		await syncNotices(order, origin);
 		return { ok: false, why: 'stale', status: from };
 	}
 
@@ -277,13 +330,13 @@ export async function applyStatus(
 	if (!moved) {
 		// Хтось устиг раніше. Стан читаємо заново — саме його треба показати.
 		const fresh = await loadOrder(number);
-		if (fresh) await refreshNotices(fresh, origin);
+		if (fresh) await syncNotices(fresh, origin);
 		return { ok: false, why: 'stale', status: fresh?.status as OrderStatusValue };
 	}
 
 	// Новий стан уже відомий, тож картку складаємо з того, що прочитали,
 	// а не ходимо в базу вдруге.
-	await refreshNotices(
+	await syncNotices(
 		{
 			...order,
 			status: to,
@@ -326,8 +379,15 @@ export async function rememberNotice(
 	actor: Actor,
 	messageId: number
 ): Promise<void> {
-	const order = await db.order.findUnique({ where: { number }, select: { id: true } });
+	const order = await db.order.findUnique({
+		where: { number },
+		select: { id: true, status: true }
+	});
 	if (!order) return;
+
+	// Закрите замовлення перемальовувати нікуди: кнопок під ним немає, а
+	// рядок лишився б у базі назавжди й ніколи не знадобився.
+	if (closesOrder(order.status as OrderStatusValue)) return;
 
 	await db.botNotice.upsert({
 		where: { orderId_chatId: { orderId: order.id, chatId: actor.chatId } },

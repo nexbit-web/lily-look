@@ -58,6 +58,21 @@ export function statusLabel(status: OrderStatusValue): string {
 	return ORDER_STATUS_LABELS[status];
 }
 
+/**
+ * Чи закрите замовлення остаточно.
+ *
+ * Закрите — це те, з яким більше нічого не роблять: отримане або
+ * скасоване. Відправлене сюди не входить, хоч роботи в магазині по ньому
+ * вже й немає: доставку ще треба відзначити, і кнопка для цього має
+ * лишитись під повідомленням.
+ *
+ * Рахується з `FLOW`, а не окремим списком: стан без жодної дії і є той,
+ * далі якого не рухаються. Інакше два списки рано чи пізно розійшлись би.
+ */
+export function closesOrder(status: OrderStatusValue): boolean {
+	return FLOW[status].length === 0;
+}
+
 /** Чи має роль право на звіти й видачу доступів. */
 export function isAdmin(role: BotRoleValue): boolean {
 	return role === 'ADMIN';

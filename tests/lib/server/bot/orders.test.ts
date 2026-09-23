@@ -13,7 +13,7 @@ const db = {
 	order: { findUnique: vi.fn(), updateMany: vi.fn(), findMany: vi.fn() },
 	orderEvent: { create: vi.fn() },
 	productVariant: { updateMany: vi.fn() },
-	botNotice: { findMany: vi.fn(), upsert: vi.fn() },
+	botNotice: { findMany: vi.fn(), upsert: vi.fn(), deleteMany: vi.fn() },
 	botUser: { findMany: vi.fn() },
 	// Транзакція віддає ті самі моки: перевіряємо, що саме в ній робиться.
 	$transaction: vi.fn(async (run: (tx: unknown) => unknown) => run(db))
@@ -22,6 +22,7 @@ const db = {
 const api = {
 	sendMessage: vi.fn(),
 	editMessage: vi.fn(),
+	deleteMessage: vi.fn(),
 	answerCallback: vi.fn(),
 	callTelegram: vi.fn()
 };
@@ -81,6 +82,7 @@ beforeEach(() => {
 	}
 	api.sendMessage.mockReset();
 	api.editMessage.mockReset();
+	api.deleteMessage.mockReset();
 
 	db.order.updateMany.mockResolvedValue({ count: 1 });
 	db.productVariant.updateMany.mockResolvedValue({ count: 1 });
@@ -90,6 +92,8 @@ beforeEach(() => {
 	db.botUser.findMany.mockResolvedValue([]);
 	api.sendMessage.mockResolvedValue({ ok: true, result: { message_id: 5 } });
 	api.editMessage.mockResolvedValue({ ok: true, result: {} });
+	api.deleteMessage.mockResolvedValue({ ok: true, result: {} });
+	db.botNotice.deleteMany.mockResolvedValue({ count: 1 });
 });
 
 describe('зміна статусу', () => {
@@ -374,5 +378,108 @@ describe('скільки коштує натискання', () => {
 		await applyStatus('LL-ABC234', 'CONFIRMED', manager, null);
 
 		expect(db.order.findUnique).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe('закрите замовлення зникає з чату', () => {
+	/**
+	 * Картка живе рівно стільки, скільки по замовленню щось роблять.
+	 * Отримане й скасоване вже нічого не чекають, а чат собою забивають.
+	 */
+	const inTwoChats = [
+		{ chatId: 777n, messageId: 5n, botUser: { role: 'MANAGER' } },
+		{ chatId: 888n, messageId: 9n, botUser: { role: 'COURIER' } }
+	];
+
+	it('«Отримано» прибирає повідомлення з усіх чатів', async () => {
+		db.order.findUnique.mockResolvedValue(card({ status: 'SHIPPED', items: [] }));
+		db.botNotice.findMany.mockResolvedValue(inTwoChats);
+
+		const outcome = await applyStatus('LL-ABC234', 'DELIVERED', manager, null);
+
+		expect(outcome).toEqual({ ok: true, status: 'DELIVERED' });
+		expect(api.deleteMessage.mock.calls.map((call) => call[0])).toEqual([777n, 888n]);
+		expect(api.editMessage).not.toHaveBeenCalled();
+	});
+
+	it('скасування теж прибирає картку, але товар повертає на склад', async () => {
+		db.order.findUnique.mockResolvedValue(card({ status: 'NEW' }));
+		db.botNotice.findMany.mockResolvedValue(inTwoChats);
+
+		await applyStatus('LL-ABC234', 'CANCELLED', manager, null);
+
+		expect(api.deleteMessage).toHaveBeenCalledTimes(2);
+		expect(db.productVariant.updateMany).toHaveBeenCalledTimes(1);
+	});
+
+	/** Сліду в базі теж не лишаємо: без повідомлення рядок ні про що. */
+	it('рядки BotNotice прибираються разом із повідомленнями', async () => {
+		db.order.findUnique.mockResolvedValue(card({ status: 'SHIPPED', items: [] }));
+		db.botNotice.findMany.mockResolvedValue(inTwoChats);
+
+		await applyStatus('LL-ABC234', 'DELIVERED', manager, null);
+
+		expect(db.botNotice.deleteMany).toHaveBeenCalledWith({ where: { orderId: 'o1' } });
+	});
+
+	/** Історія живе в OrderEvent — зникнення картки її не торкається. */
+	it('аналітика лишається на місці', async () => {
+		db.order.findUnique.mockResolvedValue(card({ status: 'SHIPPED', items: [] }));
+		db.botNotice.findMany.mockResolvedValue(inTwoChats);
+
+		await applyStatus('LL-ABC234', 'DELIVERED', manager, null);
+
+		expect(db.orderEvent.create.mock.calls[0][0].data).toMatchObject({
+			orderId: 'o1',
+			status: 'DELIVERED',
+			actorId: 'u1'
+		});
+	});
+
+	it('відправлене лишається: по ньому ще відзначати доставку', async () => {
+		db.order.findUnique.mockResolvedValue(card({ status: 'CONFIRMED', items: [] }));
+		db.botNotice.findMany.mockResolvedValue(inTwoChats);
+
+		await applyStatus('LL-ABC234', 'SHIPPED', manager, null);
+
+		expect(api.deleteMessage).not.toHaveBeenCalled();
+		expect(api.editMessage).toHaveBeenCalledTimes(2);
+	});
+
+	/**
+	 * Telegram дає боту видаляти своє лише перші 48 годин. Старішу картку
+	 * згортаємо в рядок — аби не лишити кнопки від стану, якого немає.
+	 */
+	it('старе повідомлення, яке вже не видалити, згортається в рядок', async () => {
+		db.order.findUnique.mockResolvedValue(card({ status: 'SHIPPED', items: [] }));
+		db.botNotice.findMany.mockResolvedValue([inTwoChats[0]]);
+		api.deleteMessage.mockResolvedValue({ ok: false, why: 'message to delete not found' });
+
+		await applyStatus('LL-ABC234', 'DELIVERED', manager, null);
+
+		const [chatId, messageId, text, keyboard] = api.editMessage.mock.calls[0];
+		expect(chatId).toBe(777n);
+		expect(messageId).toBe(5n);
+		expect(text).toContain('LL-ABC234');
+		// Підпис стану, а не напис на кнопці: у рядку лишається сам статус.
+		expect(text).toContain('Доставлене');
+		// Головне — без кнопок.
+		expect(keyboard).toBeUndefined();
+		expect(db.botNotice.deleteMany).toHaveBeenCalled();
+	});
+
+	/**
+	 * Статус закрили в CRM. Натискання по старій кнопці не малює картку
+	 * заново: замовлення вже закрите, тож вона зникає.
+	 */
+	it('закрите в CRM прибирається при першому натисканні', async () => {
+		db.order.findUnique.mockResolvedValue(card({ status: 'CANCELLED', items: [] }));
+		db.botNotice.findMany.mockResolvedValue(inTwoChats);
+
+		const outcome = await applyStatus('LL-ABC234', 'CONFIRMED', manager, null);
+
+		expect(outcome).toMatchObject({ ok: false, why: 'stale', status: 'CANCELLED' });
+		expect(db.order.updateMany).not.toHaveBeenCalled();
+		expect(api.deleteMessage).toHaveBeenCalledTimes(2);
 	});
 });
