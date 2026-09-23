@@ -1,0 +1,237 @@
+import type { CartLine } from '$lib/types';
+import { describe, expect, it } from 'vitest';
+import { MESSAGE_LIMIT, buildOrderMessage, type OrderMessage } from '$lib/bot/order-message';
+
+/**
+ * Повідомлення про замовлення — це наряд на збірку, який менеджер читає
+ * з телефона. Тому перевіряємо дві речі: що в ньому є все потрібне для
+ * збірки й дзвінка, і що в ньому немає нічого зайвого — жодної картинки,
+ * жодної оздоби.
+ */
+
+const line = (patch: Partial<CartLine> = {}): CartLine => ({
+	id: 'item-1',
+	variantId: 'var-1',
+	productName: 'Сатинова сукня Olivia',
+	productSlug: 'suknia-olivia',
+	size: 'M',
+	color: 'Пудровий',
+	imageUrl: null,
+	unitPrice: 264_900,
+	quantity: 1,
+	lineTotal: 264_900,
+	stock: 5,
+	...patch
+});
+
+const order = (patch: Partial<OrderMessage> = {}): OrderMessage => ({
+	number: 'LL-ABC234',
+	customerName: 'Олена Коваль',
+	customerPhone: '+380671234567',
+	customerEmail: null,
+	method: 'NOVA_POSHTA_BRANCH',
+	city: 'Одеса',
+	address: 'Відділення № 12',
+	comment: '',
+	lines: [line()],
+	subtotal: 264_900,
+	deliveryCost: 9800,
+	total: 274_700,
+	payment: 'Оплата при отриманні',
+	// Час фіксований, щоб перевіряти формат, а не годинник машини.
+	now: new Date('2026-09-17T12:42:00Z'),
+	...patch
+});
+
+const text = (patch: Partial<OrderMessage> = {}) => buildOrderMessage(order(patch));
+const plain = (value: string) => value.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ');
+
+describe('без оздоби', () => {
+	it('жодного емодзі — ні в заголовку, ні в розділах', () => {
+		const message = text({
+			customerEmail: 'olena@example.test',
+			comment: 'Дзвоніть після 18:00',
+			orderUrl: 'https://lilylook.store/order/LL-ABC234'
+		});
+
+		expect(message).not.toMatch(/\p{Extended_Pictographic}/u);
+	});
+
+	/**
+	 * Розділи розмічені вагою тексту й порожніми рядками, а не значками:
+	 * підписи лишились тільки там, де без них незрозуміло, що це за список.
+	 */
+	it('розділи розмічені словами й пробілом, а не значками', () => {
+		const message = plain(text({ customerEmail: 'olena@example.test', comment: 'до 18:00' }));
+
+		expect(message).toContain('Коментар покупця');
+		expect(message).toContain('Зібрати');
+		expect(message).toContain('Разом');
+	});
+});
+
+describe('що має бути в наряді', () => {
+	it('номер замовлення й київський час', () => {
+		const message = plain(text());
+
+		expect(message).toContain('Замовлення LL-ABC234');
+		// 12:42 UTC у вересні — це 15:42 у Києві.
+		expect(message).toContain('17 вересня');
+		expect(message).toContain('15:42');
+	});
+
+	/**
+	 * Номер менеджер копіює постійно — у накладну, в CRM, у розмову з
+	 * покупцем. У `<code>` Telegram копіює його одним дотиком.
+	 */
+	it('номер загорнутий у code — щоб копіювався дотиком', () => {
+		expect(text()).toContain('<code>LL-ABC234</code>');
+	});
+
+	it('стан замовлення видно в шапці', () => {
+		const message = plain(text({ status: 'Відправлене' }));
+
+		expect(message).toContain('Відправлене · 17 вересня');
+	});
+
+	it('хто змінив стан — окремим рядком, і тільки коли є що сказати', () => {
+		expect(plain(text({ changedBy: 'Олена · 18 вересня 10:12' }))).toContain(
+			'Олена · 18 вересня 10:12'
+		);
+		expect(plain(text())).not.toContain('·  ');
+	});
+
+	it('покупець і телефон посиланням — щоб набрати одним дотиком', () => {
+		const message = text({ customerEmail: 'olena@example.test' });
+
+		expect(message).toContain('Олена Коваль');
+		expect(message).toContain('<a href="tel:+380671234567">+380671234567</a>');
+		expect(message).toContain('olena@example.test');
+	});
+
+	it('спосіб доставки й куди везти', () => {
+		const message = plain(text());
+
+		expect(message).toContain('Нова Пошта — відділення');
+		expect(message).toContain('Одеса, Відділення № 12');
+	});
+
+	it('позиція: назва, колір, розмір, кількість, сума', () => {
+		const message = plain(text({ lines: [line({ quantity: 2, lineTotal: 529_800 })] }));
+
+		expect(message).toContain('1. Сатинова сукня Olivia');
+		expect(message).toContain('Пудровий · M · ×2 · 5 298 грн');
+	});
+
+	it('кількість пишемо навіть коли вона одна — зібрати не те дорожче', () => {
+		expect(plain(text())).toContain('×1');
+	});
+
+	/** Назву шукають очима першою, тож вона одна в позиції жирна. */
+	it('назва позиції виділена, ознаки — ні', () => {
+		const message = text();
+
+		expect(message).toContain('<b>Сатинова сукня Olivia</b>');
+		expect(message).not.toContain('<b>Пудровий');
+	});
+
+	it('позиції нумеруються — так їх легше відмічати на полиці', () => {
+		const message = plain(
+			text({ lines: [line(), line({ id: 'item-2', productName: 'Куртка-вітровка' })] })
+		);
+
+		expect(message).toContain('1. Сатинова сукня Olivia');
+		expect(message).toContain('2. Куртка-вітровка');
+	});
+
+	it('суми й спосіб оплати', () => {
+		const message = plain(text());
+
+		expect(message).toContain('Товари · 2 649 грн');
+		expect(message).toContain('Доставка · 98 грн');
+		expect(message).toContain('Разом · 2 747 грн');
+		expect(message).toContain('Оплата при отриманні');
+	});
+
+	/** Підсумок — єдине число, яке шукають очима, тож воно одне й жирне. */
+	it('виділений лише підсумок, не кожен рядок сум', () => {
+		const message = text();
+
+		// Ціни містять нерозривні пробіли, тож звіряємось із розміткою, а не
+		// з точним написанням суми — її перевіряє тест вище.
+		expect(message).toMatch(/<b>Разом · .+<\/b>/);
+		expect(message).not.toContain('<b>Товари');
+	});
+
+	it('безкоштовну доставку називаємо словом, а не нулем', () => {
+		expect(plain(text({ deliveryCost: 0 }))).toContain('Доставка · безкоштовно');
+	});
+
+	it('посилання на замовлення, якщо воно відоме', () => {
+		const url = 'https://lilylook.store/order/LL-ABC234';
+
+		expect(text({ orderUrl: url })).toContain(url);
+		expect(text()).not.toContain('/order/');
+	});
+});
+
+describe('чого не має бути', () => {
+	it('порожнього розділу з коментарем', () => {
+		expect(plain(text())).not.toContain('Коментар');
+	});
+
+	it('рядка з поштою, якої покупець не залишив', () => {
+		expect(text()).not.toContain('@');
+	});
+});
+
+describe('дані покупця не ламають розмітку', () => {
+	it('кутові дужки, амперсанд і лапки екрануються', () => {
+		const message = text({
+			customerName: '<b>Олена</b> & Ко',
+			comment: '<a href="evil">клік</a>'
+		});
+
+		expect(message).toContain('&lt;b&gt;Олена&lt;/b&gt; &amp; Ко');
+		expect(message).toContain('&quot;evil&quot;');
+		expect(message).not.toContain('<b>Олена');
+	});
+});
+
+describe('довге замовлення', () => {
+	const many = Array.from({ length: 120 }, (_, index) =>
+		line({
+			id: `item-${index}`,
+			productName: `Сукня довгої назви для перевірки межі номер ${index}`
+		})
+	);
+
+	it('вкладається в межу Telegram', () => {
+		expect(text({ lines: many }).length).toBeLessThanOrEqual(MESSAGE_LIMIT);
+	});
+
+	it('ріже список позицій і каже, скільки лишилось за посиланням', () => {
+		const message = plain(text({ lines: many }));
+
+		expect(message).toMatch(/та ще \d+ позиц/);
+		// Суми й підпис мають лишитись — це те, без чого наряд марний.
+		expect(message).toContain('Разом ·');
+		expect(message).toContain('Оплата при отриманні');
+	});
+
+	/** «81 позиція», а не «81 позицій»: число тут пишуть українською. */
+	it('число позицій узгоджене з формою слова', () => {
+		const message = plain(text({ lines: many.slice(0, 43) }));
+		const match = message.match(/та ще (\d+) (позиц\S+)/);
+
+		expect(match).not.toBeNull();
+		const [, count, form] = match!;
+		if (Number(count) % 10 === 1 && Number(count) % 100 !== 11) {
+			expect(form).toBe('позиція');
+		}
+	});
+
+	it('коротке замовлення не ріже нічого', () => {
+		expect(plain(text())).not.toContain('та ще');
+	});
+});

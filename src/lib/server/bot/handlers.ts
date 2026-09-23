@@ -4,13 +4,14 @@ import {
 	isAdmin,
 	statusLabel,
 	type BotRoleValue
-} from '$lib/bot-workflow';
-import type { OrderStatusValue } from '$lib/bot-workflow';
+} from '$lib/bot/workflow';
+import type { OrderStatusValue } from '$lib/bot/workflow';
 import { formatPrice } from '$lib/money';
-import { escapeHtml } from '$lib/order-message';
+import { escapeHtml } from '$lib/bot/order-message';
 import {
 	createInvite,
 	findActor,
+	isLastAdmin,
 	leaveBot,
 	listAccess,
 	redeemInvite,
@@ -86,6 +87,20 @@ function displayName(from: { first_name?: string; last_name?: string; username?:
 	return full || from.username || 'Без імені';
 }
 
+/**
+ * Підказка разом із меню команд.
+ *
+ * Меню ставиться щоразу, а не лише в мить видачі доступу: Telegram тримає
+ * список на боці чату й сам його не оновлює. Той, хто отримав доступ раніше,
+ * ніж зʼявилась нова команда, інакше так і сидів би зі старим меню або зовсім
+ * без нього. `/start` і `/dopomoha` — рівно ті дві миті, коли людина прийшла
+ * по підказку, і зайвий виклик тут нічого не коштує: в базу він не ходить.
+ */
+async function showHelp(actor: Actor, chatId: bigint | number, greeting?: string): Promise<void> {
+	await setChatCommands(chatId, commandsFor(actor.role));
+	await sendMessage(chatId, greeting ? `${greeting}\n\n${helpFor(actor)}` : helpFor(actor));
+}
+
 async function handleStart(
 	chatId: number,
 	from: NonNullable<NonNullable<Update['message']>['from']>,
@@ -93,10 +108,12 @@ async function handleStart(
 ): Promise<void> {
 	if (!code) {
 		const actor = await findActor(BigInt(from.id));
-		await sendMessage(
-			chatId,
-			actor ? `Вітаю, ${escapeHtml(actor.name)}.\n\n${helpFor(actor)}` : DENIED
-		);
+		if (!actor) {
+			await sendMessage(chatId, DENIED);
+			return;
+		}
+
+		await showHelp(actor, chatId, `Вітаю, ${escapeHtml(actor.name)}.`);
 		return;
 	}
 
@@ -108,14 +125,10 @@ async function handleStart(
 	});
 
 	if (outcome.ok) {
-		// Меню команд ставимо саме тут: воно залежить від ролі, а роль стає
-		// відома тільки після того, як код погашено.
-		await setChatCommands(chatId, commandsFor(outcome.actor.role));
-
 		const greeting = outcome.returning
 			? `Ви вже маєте доступ, ${escapeHtml(outcome.actor.name)}.`
 			: `Готово, ${escapeHtml(outcome.actor.name)}. Доступ відкрито.`;
-		await sendMessage(chatId, `${greeting}\n\n${helpFor(outcome.actor)}`);
+		await showHelp(outcome.actor, chatId, greeting);
 		return;
 	}
 
@@ -174,14 +187,37 @@ async function handleFind(actor: Actor, number: string, origin: string | null): 
 	if (outcome.ok) await rememberNotice(wanted, actor, outcome.result.message_id);
 }
 
+/** Підтвердження для виходу, після якого ніхто не відчинить двері. */
+const CONFIRM_LEAVE = 'tak';
+
 /**
  * Вийти з бота.
  *
  * Прибираємо меню команд разом із доступом: інакше в людини лишився б
  * список того, чого вона вже не може. Повернутись можна тільки новим
  * кодом — старий давно погашений.
+ *
+ * Останній власник — окрема розмова. За ним зачиняться двері: коди видає
+ * тільки адмін і тільки зсередини бота, тож повернутись вийде хіба через
+ * базу. Тому такий вихід перепитуємо й підказуємо, як зробити правильно.
  */
-async function handleLeave(actor: Actor): Promise<void> {
+async function handleLeave(actor: Actor, argument: string): Promise<void> {
+	if (argument.trim().toLowerCase() !== CONFIRM_LEAVE && (await isLastAdmin(actor))) {
+		await sendMessage(
+			actor.chatId,
+			[
+				'<b>Ви єдиний власник із доступом.</b>',
+				'',
+				'Якщо вийдете зараз, видати новий код буде нікому: <code>/kod</code> працює лише зсередини бота, а ваш код уже погашений. Повернути доступ вийде тільки через базу.',
+				'',
+				'Безпечніше спершу видати запасний код: <code>/kod ADMIN запасний</code>',
+				'',
+				'Якщо все одно виходите — надішліть <code>/vyity tak</code>.'
+			].join('\n')
+		);
+		return;
+	}
+
 	await leaveBot(actor);
 	await clearChatCommands(actor.chatId);
 	await sendMessage(
@@ -307,8 +343,8 @@ async function handleMessage(message: NonNullable<Update['message']>, origin: st
 
 	if (name === '/zamovlennia') return void (await handleList(actor));
 	if (name === '/z') return void (await handleFind(actor, argument, origin));
-	if (name === '/vyity') return void (await handleLeave(actor));
-	if (name === '/dopomoha') return void (await sendMessage(actor.chatId, helpFor(actor)));
+	if (name === '/vyity') return void (await handleLeave(actor, argument));
+	if (name === '/dopomoha') return void (await showHelp(actor, actor.chatId));
 
 	if (isAdmin(actor.role)) {
 		if (name === '/zvit') return void (await sendMessage(actor.chatId, await buildReport()));

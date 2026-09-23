@@ -1,6 +1,6 @@
-import { statusLabel, type OrderStatusValue } from '$lib/bot-workflow';
+import { statusLabel, type OrderStatusValue } from '$lib/bot/workflow';
 import { formatPrice } from '$lib/money';
-import { escapeHtml } from '$lib/order-message';
+import { escapeHtml } from '$lib/bot/order-message';
 import { db } from '../db.js';
 
 /**

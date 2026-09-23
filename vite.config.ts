@@ -18,6 +18,9 @@ export default defineConfig({
 		pool: 'threads',
 		maxWorkers: 2,
 
+		// Тести живуть у `tests/`, дзеркалячи структуру `src/`: шлях до
+		// тесту читається як шлях до модуля, який він перевіряє.
+		//
 		// Два прогони: серверна логіка в node, компоненти — у jsdom.
 		projects: [
 			{
@@ -27,8 +30,8 @@ export default defineConfig({
 					pool: 'threads',
 					environment: 'node',
 					clearMocks: true,
-					include: ['src/**/*.{test,spec}.{js,ts}'],
-					exclude: ['src/**/*.svelte.{test,spec}.{js,ts}']
+					include: ['tests/**/*.{test,spec}.{js,ts}'],
+					exclude: ['tests/**/*.svelte.{test,spec}.{js,ts}']
 				}
 			},
 			{
@@ -39,8 +42,8 @@ export default defineConfig({
 					pool: 'threads',
 					environment: 'jsdom',
 					clearMocks: true,
-					include: ['src/**/*.svelte.{test,spec}.{js,ts}'],
-					setupFiles: ['./vitest-setup-client.ts']
+					include: ['tests/**/*.svelte.{test,spec}.{js,ts}'],
+					setupFiles: ['./tests/setup/client.ts']
 				}
 			}
 		]

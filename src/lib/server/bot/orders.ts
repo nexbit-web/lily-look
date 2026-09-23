@@ -5,8 +5,8 @@ import {
 	statusLabel,
 	type BotRoleValue,
 	type OrderStatusValue
-} from '$lib/bot-workflow';
-import { buildOrderMessage, type OrderMessage } from '$lib/order-message';
+} from '$lib/bot/workflow';
+import { buildOrderMessage, type OrderMessage } from '$lib/bot/order-message';
 import type { DeliveryMethodValue } from '$lib/config';
 import { db } from '../db.js';
 import { getPaymentProvider } from '../payments.js';

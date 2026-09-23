@@ -1,4 +1,4 @@
-import type { BotRoleValue } from '$lib/bot-workflow';
+import type { BotRoleValue } from '$lib/bot/workflow';
 import { db } from '../db.js';
 
 /**
@@ -262,6 +262,27 @@ export async function prunePastUpdates(olderThanMs = 24 * 60 * 60 * 1000): Promi
 	});
 
 	return count;
+}
+
+/**
+ * Чи це останній власник із доступом.
+ *
+ * Питання не празне: коди видає тільки адмін і тільки зсередини бота,
+ * а кожен код одноразовий. Якщо останній адмін вийде, видати новий
+ * код буде нікому — бот лишиться живий, але без жодного входу, крім
+ * ручного запису в базу.
+ *
+ * Окремий запит, а не поле в `Actor`: це потрібно рівно перед виходом,
+ * і рахувати адмінів на кожне повідомлення заради однієї команди немає сенсу.
+ */
+export async function isLastAdmin(actor: Actor): Promise<boolean> {
+	if (actor.role !== 'ADMIN') return false;
+
+	const others = await db.botUser.count({
+		where: { role: 'ADMIN', isActive: true, leftAt: null, id: { not: actor.id } }
+	});
+
+	return others === 0;
 }
 
 /**

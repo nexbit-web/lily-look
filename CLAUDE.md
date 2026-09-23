@@ -36,10 +36,12 @@ npm run db:studio      # GUI к базе
 
 Проверка перед сдачей задачи: `npm test && npm run check && npm run lint`.
 
-**Тесты.** Юнит-тесты лежат рядом с кодом: `*.test.ts` — серверная логика (node),
-`*.svelte.test.ts` — компоненты (jsdom + @testing-library/svelte). Prisma в тестах
-не поднимается: `db` мокается через `vi.mock('./db.js', …)`, так что тесты не ходят
-в Neon и не требуют `.env`.
+**Тесты — в `tests/`, не рядом с кодом.** Дерево повторяет `src/` файл в файл:
+тест для `src/lib/server/catalog.ts` лежит в `tests/lib/server/catalog.test.ts`.
+Имя решает, в каком прогоне тест окажется: `*.svelte.test.ts` — jsdom, всё
+остальное — node. Импорты только через алиасы (`$lib/…`, `$routes/…`), Prisma
+мокается через `vi.mock('$lib/server/db', …)` — в Neon тесты не ходят и `.env`
+не требуют. Подробности — `tests/README.md`.
 
 ## Где что лежит
 
@@ -50,10 +52,11 @@ npm run db:studio      # GUI к базе
 | Оформление заказа             | `src/lib/server/orders.ts`   |
 | Подключение провайдера оплаты | `src/lib/server/payments.ts` |
 | Телеграм-бот менеджеров       | `src/lib/server/bot/`        |
-| Правила статусов заказа       | `src/lib/bot-workflow.ts`    |
+| Правила статусов заказа       | `src/lib/bot/workflow.ts`    |
 | Доставка, размеры, сортировки | `src/lib/config.ts`          |
 | Валидация форм                | `src/lib/schemas.ts`         |
 | Схема БД                      | `prisma/schema.prisma`       |
+| Тесты                         | `tests/` (зеркало `src/`)    |
 | Демо-данные                   | `prisma/seed.ts`             |
 
 ## Особенности реализации
