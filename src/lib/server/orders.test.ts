@@ -12,7 +12,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const readCart = vi.fn();
 const clearCart = vi.fn();
 const resolveDeliveryCost = vi.fn();
-const notifyNewOrder = vi.fn();
+const dispatchOrder = vi.fn();
 
 const tx = {
 	productVariant: { updateMany: vi.fn() },
@@ -27,7 +27,7 @@ const db = {
 vi.mock('./cart.js', () => ({ readCart, clearCart }));
 vi.mock('./db.js', () => ({ db }));
 vi.mock('./delivery-cost.js', () => ({ resolveDeliveryCost }));
-vi.mock('./telegram.js', () => ({ notifyNewOrder }));
+vi.mock('./bot/orders.js', () => ({ dispatchOrder }));
 
 const { createOrder } = await import('./orders.js');
 
@@ -64,7 +64,7 @@ beforeEach(() => {
 	readCart.mockResolvedValue(cart);
 	clearCart.mockResolvedValue(undefined);
 	resolveDeliveryCost.mockResolvedValue(9800);
-	notifyNewOrder.mockResolvedValue(undefined);
+	dispatchOrder.mockResolvedValue(0);
 	tx.productVariant.updateMany.mockResolvedValue({ count: 1 });
 	tx.order.create.mockResolvedValue({ id: 'order-1', number: 'LL-ABC234' });
 	db.order.update.mockResolvedValue({});
@@ -141,9 +141,7 @@ describe('createOrder', () => {
 		const result = await createOrder(cookies, input);
 
 		expect(result).toMatchObject({ ok: true, number: 'LL-ABC234' });
-		expect(notifyNewOrder).toHaveBeenCalledWith(
-			expect.objectContaining({ number: 'LL-ABC234', total: 329_600 })
-		);
+		expect(dispatchOrder).toHaveBeenCalledWith('LL-ABC234', null);
 		expect(clearCart).toHaveBeenCalledWith(cookies);
 	});
 
@@ -153,36 +151,27 @@ describe('createOrder', () => {
 	});
 });
 
-describe('сповіщення менеджерам', () => {
-	it('передає все, що потрібно для наряду, і посилання на замовлення', async () => {
+/**
+ * Що саме бачить менеджер, перевіряється там, де картка й складається
+ * (`./bot/orders`). Тут — лише те, що замовлення до розсилки доходить і
+ * що покупець від неї ніяк не залежить.
+ */
+describe('розсилка менеджерам', () => {
+	it('передає номер і адресу сайту — з неї збереться посилання', async () => {
 		await createOrder(cookies, input, 'https://lilylook.store');
 
-		expect(notifyNewOrder).toHaveBeenCalledWith(
-			expect.objectContaining({
-				number: 'LL-ABC234',
-				customerName: 'Олена Коваль',
-				customerPhone: '+380671234567',
-				method: 'NOVA_POSHTA_BRANCH',
-				city: 'Одеса',
-				address: 'Відділення № 12',
-				lines: [line],
-				subtotal: 319_800,
-				total: 329_600,
-				payment: 'Оплата при отриманні',
-				orderUrl: 'https://lilylook.store/order/LL-ABC234'
-			})
-		);
+		expect(dispatchOrder).toHaveBeenCalledWith('LL-ABC234', 'https://lilylook.store');
 	});
 
-	it('без адреси сайту посилання просто немає', async () => {
+	it('без адреси сайту розсилка все одно йде', async () => {
 		await createOrder(cookies, input);
 
-		expect(notifyNewOrder.mock.calls[0][0].orderUrl).toBeNull();
+		expect(dispatchOrder).toHaveBeenCalledWith('LL-ABC234', null);
 	});
 
 	it('покупця не тримаємо, поки відповідає Telegram', async () => {
-		// Повідомлення, яке ніколи не доїде: замовлення має завершитись однаково.
-		notifyNewOrder.mockReturnValue(new Promise(() => {}));
+		// Розсилка, яка ніколи не доїде: замовлення має завершитись однаково.
+		dispatchOrder.mockReturnValue(new Promise(() => {}));
 
 		const result = await createOrder(cookies, input);
 
@@ -193,7 +182,7 @@ describe('сповіщення менеджерам', () => {
 	it('Telegram зламався — замовлення все одно створене', async () => {
 		// Модуль гасить помилки в себе, але навіть якщо колись перестане —
 		// замовлення важливіше за повідомлення.
-		notifyNewOrder.mockRejectedValue(new Error('telegram down'));
+		dispatchOrder.mockRejectedValue(new Error('telegram down'));
 
 		const result = await createOrder(cookies, input);
 

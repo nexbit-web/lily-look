@@ -12,8 +12,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const db = {
 	order: { findUnique: vi.fn(), updateMany: vi.fn(), findMany: vi.fn() },
 	orderEvent: { create: vi.fn() },
+	productVariant: { updateMany: vi.fn() },
 	botNotice: { findMany: vi.fn(), upsert: vi.fn() },
-	botUser: { findMany: vi.fn() }
+	botUser: { findMany: vi.fn() },
+	// Транзакція віддає ті самі моки: перевіряємо, що саме в ній робиться.
+	$transaction: vi.fn(async (run: (tx: unknown) => unknown) => run(db))
 };
 
 const api = {
@@ -72,13 +75,15 @@ const card = (patch: Record<string, unknown> = {}) => ({
 });
 
 beforeEach(() => {
-	for (const model of Object.values(db)) {
+	for (const [name, model] of Object.entries(db)) {
+		if (name === '$transaction') continue;
 		for (const method of Object.values(model)) method.mockReset();
 	}
 	api.sendMessage.mockReset();
 	api.editMessage.mockReset();
 
 	db.order.updateMany.mockResolvedValue({ count: 1 });
+	db.productVariant.updateMany.mockResolvedValue({ count: 1 });
 	db.orderEvent.create.mockResolvedValue({});
 	db.botNotice.findMany.mockResolvedValue([]);
 	db.botNotice.upsert.mockResolvedValue({});
@@ -89,7 +94,7 @@ beforeEach(() => {
 
 describe('зміна статусу', () => {
 	it('дозволений перехід застосовується й лишає слід у журналі', async () => {
-		db.order.findUnique.mockResolvedValueOnce({ id: 'o1', status: 'NEW' }).mockResolvedValue(null);
+		db.order.findUnique.mockResolvedValue(card({ status: 'NEW', items: [] }));
 
 		const outcome = await applyStatus('LL-ABC234', 'CONFIRMED', manager, null);
 
@@ -103,17 +108,26 @@ describe('зміна статусу', () => {
 		});
 	});
 
-	it('перестрибнути крок не вийде навіть підкинутою кнопкою', async () => {
-		db.order.findUnique.mockResolvedValue({ id: 'o1', status: 'NEW' });
+	/**
+	 * «Отримано» менеджеру доступне — але з відправленого, не з нового. Для
+	 * бота це не підробка, а ознака, що картка застаріла, тож замовлення він
+	 * не чіпає, зате перемальовує її під справжній стан.
+	 */
+	it('перестрибнути крок не вийде: статус не рухається, картка доганяє', async () => {
+		db.order.findUnique.mockResolvedValue(card({ status: 'NEW', items: [] }));
+		db.botNotice.findMany.mockResolvedValue([
+			{ chatId: 777n, messageId: 5n, botUser: { role: 'MANAGER' } }
+		]);
 
 		const outcome = await applyStatus('LL-ABC234', 'DELIVERED', manager, null);
 
-		expect(outcome).toMatchObject({ ok: false, why: 'forbidden' });
+		expect(outcome).toMatchObject({ ok: false, why: 'stale', status: 'NEW' });
 		expect(db.order.updateMany).not.toHaveBeenCalled();
+		expect(api.editMessage).toHaveBeenCalledTimes(1);
 	});
 
 	it("кур'єр не може скасувати замовлення", async () => {
-		db.order.findUnique.mockResolvedValue({ id: 'o1', status: 'SHIPPED' });
+		db.order.findUnique.mockResolvedValue(card({ status: 'SHIPPED', items: [] }));
 
 		const outcome = await applyStatus('LL-ABC234', 'CANCELLED', courier, null);
 
@@ -122,9 +136,7 @@ describe('зміна статусу', () => {
 	});
 
 	it("кур'єр позначає отримання — це йому можна", async () => {
-		db.order.findUnique
-			.mockResolvedValueOnce({ id: 'o1', status: 'SHIPPED' })
-			.mockResolvedValue(null);
+		db.order.findUnique.mockResolvedValue(card({ status: 'SHIPPED', items: [] }));
 
 		await expect(applyStatus('LL-ABC234', 'DELIVERED', courier, null)).resolves.toEqual({
 			ok: true,
@@ -139,8 +151,8 @@ describe('зміна статусу', () => {
 	 */
 	it('хтось устиг раніше — другий отримує відмову, а не перетирає', async () => {
 		db.order.findUnique
-			.mockResolvedValueOnce({ id: 'o1', status: 'NEW' })
-			.mockResolvedValueOnce({ status: 'CONFIRMED' });
+			.mockResolvedValueOnce(card({ status: 'NEW', items: [] }))
+			.mockResolvedValue(card({ status: 'CONFIRMED', items: [] }));
 		db.order.updateMany.mockResolvedValue({ count: 0 });
 
 		const outcome = await applyStatus('LL-ABC234', 'CONFIRMED', manager, null);
@@ -163,9 +175,7 @@ describe('зміна статусу', () => {
 	 * не має лишитись із кнопками від стану, якого вже немає.
 	 */
 	it('після зміни переписуються всі копії повідомлення', async () => {
-		db.order.findUnique
-			.mockResolvedValueOnce({ id: 'o1', status: 'NEW' })
-			.mockResolvedValue(card({ status: 'CONFIRMED' }));
+		db.order.findUnique.mockResolvedValue(card({ status: 'NEW', items: [] }));
 		db.botNotice.findMany.mockResolvedValue([
 			{ chatId: 777n, messageId: 5n, botUser: { role: 'MANAGER' } },
 			{ chatId: 888n, messageId: 9n, botUser: { role: 'COURIER' } }
@@ -210,5 +220,159 @@ describe('розсилка нового замовлення', () => {
 
 		await expect(dispatchOrder('LL-ABC234', null)).resolves.toBe(0);
 		expect(db.botNotice.upsert).not.toHaveBeenCalled();
+	});
+});
+
+describe('скасування повертає товар на склад', () => {
+	const withItems = (status: string) =>
+		card({
+			status,
+			items: [
+				{ ...card().items[0], variantId: 'v1', quantity: 2 },
+				{ ...card().items[0], variantId: 'v2', quantity: 1 }
+			]
+		});
+
+	it('кожна позиція повертається у свій варіант', async () => {
+		db.order.findUnique.mockResolvedValue(withItems('NEW'));
+
+		await expect(applyStatus('LL-ABC234', 'CANCELLED', manager, null)).resolves.toEqual({
+			ok: true,
+			status: 'CANCELLED'
+		});
+
+		expect(db.productVariant.updateMany).toHaveBeenCalledTimes(2);
+		expect(db.productVariant.updateMany.mock.calls[0][0]).toEqual({
+			where: { id: 'v1' },
+			data: { stock: { increment: 2 } }
+		});
+		expect(db.productVariant.updateMany.mock.calls[1][0].data).toEqual({
+			stock: { increment: 1 }
+		});
+	});
+
+	/**
+	 * Інакше склад розʼїхався б із замовленням: статус змінився, а залишки
+	 * ні, або навпаки.
+	 */
+	it('повернення йде в тій самій транзакції, що й зміна статусу', async () => {
+		db.order.findUnique.mockResolvedValue(withItems('NEW'));
+
+		await applyStatus('LL-ABC234', 'CANCELLED', manager, null);
+
+		expect(db.$transaction).toHaveBeenCalledTimes(1);
+	});
+
+	it('решта переходів складу не чіпає', async () => {
+		db.order.findUnique.mockResolvedValue(withItems('NEW'));
+
+		await applyStatus('LL-ABC234', 'CONFIRMED', manager, null);
+
+		expect(db.productVariant.updateMany).not.toHaveBeenCalled();
+	});
+
+	/**
+	 * Варіант могли видалити в CRM уже після замовлення: знімок у позиції
+	 * лишився, а повертати нікуди.
+	 */
+	it('позиція без варіанта пропускається, скасування проходить', async () => {
+		db.order.findUnique.mockResolvedValue(
+			card({ status: 'NEW', items: [{ ...card().items[0], variantId: null, quantity: 3 }] })
+		);
+
+		await expect(applyStatus('LL-ABC234', 'CANCELLED', manager, null)).resolves.toMatchObject({
+			ok: true
+		});
+		expect(db.productVariant.updateMany).not.toHaveBeenCalled();
+	});
+
+	/** Хтось устиг скасувати раніше — другий раз склад не поповнюється. */
+	it('програна гонка складу не чіпає', async () => {
+		db.order.findUnique
+			.mockResolvedValueOnce(withItems('NEW'))
+			.mockResolvedValue(withItems('CANCELLED'));
+		db.order.updateMany.mockResolvedValue({ count: 0 });
+
+		await expect(applyStatus('LL-ABC234', 'CANCELLED', manager, null)).resolves.toMatchObject({
+			ok: false,
+			why: 'stale'
+		});
+		expect(db.productVariant.updateMany).not.toHaveBeenCalled();
+	});
+});
+
+/**
+ * Статус міняє не тільки бот: у CRM є свої кнопки. Тоді картка в чаті
+ * показує стан, якого вже немає, і натискання по ній не має просто
+ * відмовляти — інакше замовлення застрягає й зробити з ним нічого не можна.
+ */
+describe('CRM змінила статус повз бота', () => {
+	const notices = [{ chatId: 777n, messageId: 5n, botUser: { role: 'MANAGER' } }];
+
+	it('натискання застарілою кнопкою перемальовує картку під справжній стан', async () => {
+		// У чаті замовлення ще «нове», у базі його вже відправили з CRM.
+		db.order.findUnique.mockResolvedValue(card({ status: 'SHIPPED', items: [] }));
+		db.botNotice.findMany.mockResolvedValue(notices);
+
+		const outcome = await applyStatus('LL-ABC234', 'CONFIRMED', manager, null);
+
+		expect(outcome).toMatchObject({ ok: false, why: 'stale', status: 'SHIPPED' });
+		expect(api.editMessage).toHaveBeenCalledTimes(1);
+
+		// У перемальованій картці — кнопка наступного справжнього кроку.
+		const keyboard = api.editMessage.mock.calls[0][3] as { text: string }[][];
+		expect(keyboard.flat().map((button) => button.text)).toContain('Отримано');
+	});
+
+	it('замовлення при цьому не рухається й слідів у журналі не лишає', async () => {
+		db.order.findUnique.mockResolvedValue(card({ status: 'SHIPPED', items: [] }));
+		db.botNotice.findMany.mockResolvedValue(notices);
+
+		await applyStatus('LL-ABC234', 'CONFIRMED', manager, null);
+
+		expect(db.order.updateMany).not.toHaveBeenCalled();
+		expect(db.orderEvent.create).not.toHaveBeenCalled();
+	});
+
+	/**
+	 * Справжня відмова від застарілої картки відрізняється тим, чи могла
+	 * ця роль колись так зробити. Кур'єру «Скасувати» не давали ніколи —
+	 * отже, кнопка підроблена, і доганяти нічого не треба.
+	 */
+	it('підроблену кнопку не плутаємо із застарілою', async () => {
+		db.order.findUnique.mockResolvedValue(card({ status: 'SHIPPED', items: [] }));
+
+		const outcome = await applyStatus('LL-ABC234', 'CANCELLED', courier, null);
+
+		expect(outcome).toMatchObject({ ok: false, why: 'forbidden' });
+		expect(api.editMessage).not.toHaveBeenCalled();
+	});
+});
+
+describe('скільки коштує натискання', () => {
+	/**
+	 * Замовлення читається рівно раз: новий стан після вдалого переходу й
+	 * так відомий, тож перемальовувати картку можна з уже прочитаного.
+	 * Друге читання тут було б на кожне натискання кнопки.
+	 */
+	it('вдалий перехід читає замовлення один раз', async () => {
+		db.order.findUnique.mockResolvedValue(card({ status: 'NEW', items: [] }));
+		db.botNotice.findMany.mockResolvedValue([
+			{ chatId: 777n, messageId: 5n, botUser: { role: 'MANAGER' } }
+		]);
+
+		await applyStatus('LL-ABC234', 'CONFIRMED', manager, null);
+
+		expect(db.order.findUnique).toHaveBeenCalledTimes(1);
+		expect(db.botNotice.findMany).toHaveBeenCalledTimes(1);
+	});
+
+	it('застаріла картка теж читає один раз', async () => {
+		db.order.findUnique.mockResolvedValue(card({ status: 'SHIPPED', items: [] }));
+		db.botNotice.findMany.mockResolvedValue([]);
+
+		await applyStatus('LL-ABC234', 'CONFIRMED', manager, null);
+
+		expect(db.order.findUnique).toHaveBeenCalledTimes(1);
 	});
 });

@@ -57,25 +57,48 @@ describe('без оздоби', () => {
 		expect(message).not.toMatch(/\p{Extended_Pictographic}/u);
 	});
 
-	it('розділи підписані словами, а не значками', () => {
+	/**
+	 * Розділи розмічені вагою тексту й порожніми рядками, а не значками:
+	 * підписи лишились тільки там, де без них незрозуміло, що це за список.
+	 */
+	it('розділи розмічені словами й пробілом, а не значками', () => {
 		const message = plain(text({ customerEmail: 'olena@example.test', comment: 'до 18:00' }));
 
-		expect(message).toContain('Покупець');
-		expect(message).toContain('Доставка');
-		expect(message).toContain('Товари');
 		expect(message).toContain('Коментар покупця');
+		expect(message).toContain('Зібрати');
+		expect(message).toContain('Разом');
 	});
 });
 
 describe('що має бути в наряді', () => {
-	it('номер замовлення, магазин і київський час', () => {
+	it('номер замовлення й київський час', () => {
 		const message = plain(text());
 
 		expect(message).toContain('Замовлення LL-ABC234');
-		expect(message).toContain('LILY LOOK');
 		// 12:42 UTC у вересні — це 15:42 у Києві.
 		expect(message).toContain('17 вересня');
 		expect(message).toContain('15:42');
+	});
+
+	/**
+	 * Номер менеджер копіює постійно — у накладну, в CRM, у розмову з
+	 * покупцем. У `<code>` Telegram копіює його одним дотиком.
+	 */
+	it('номер загорнутий у code — щоб копіювався дотиком', () => {
+		expect(text()).toContain('<code>LL-ABC234</code>');
+	});
+
+	it('стан замовлення видно в шапці', () => {
+		const message = plain(text({ status: 'Відправлене' }));
+
+		expect(message).toContain('Відправлене · 17 вересня');
+	});
+
+	it('хто змінив стан — окремим рядком, і тільки коли є що сказати', () => {
+		expect(plain(text({ changedBy: 'Олена · 18 вересня 10:12' }))).toContain(
+			'Олена · 18 вересня 10:12'
+		);
+		expect(plain(text())).not.toContain('·  ');
 	});
 
 	it('покупець і телефон посиланням — щоб набрати одним дотиком', () => {
@@ -97,11 +120,19 @@ describe('що має бути в наряді', () => {
 		const message = plain(text({ lines: [line({ quantity: 2, lineTotal: 529_800 })] }));
 
 		expect(message).toContain('1. Сатинова сукня Olivia');
-		expect(message).toContain('Пудровий · M · 2 шт · 5 298 грн');
+		expect(message).toContain('Пудровий · M · ×2 · 5 298 грн');
 	});
 
 	it('кількість пишемо навіть коли вона одна — зібрати не те дорожче', () => {
-		expect(plain(text())).toContain('1 шт');
+		expect(plain(text())).toContain('×1');
+	});
+
+	/** Назву шукають очима першою, тож вона одна в позиції жирна. */
+	it('назва позиції виділена, ознаки — ні', () => {
+		const message = text();
+
+		expect(message).toContain('<b>Сатинова сукня Olivia</b>');
+		expect(message).not.toContain('<b>Пудровий');
 	});
 
 	it('позиції нумеруються — так їх легше відмічати на полиці', () => {
@@ -116,14 +147,24 @@ describe('що має бути в наряді', () => {
 	it('суми й спосіб оплати', () => {
 		const message = plain(text());
 
-		expect(message).toContain('Сума: 2 649 грн');
-		expect(message).toContain('Доставка: 98 грн');
-		expect(message).toContain('Разом: 2 747 грн');
+		expect(message).toContain('Товари · 2 649 грн');
+		expect(message).toContain('Доставка · 98 грн');
+		expect(message).toContain('Разом · 2 747 грн');
 		expect(message).toContain('Оплата при отриманні');
 	});
 
+	/** Підсумок — єдине число, яке шукають очима, тож воно одне й жирне. */
+	it('виділений лише підсумок, не кожен рядок сум', () => {
+		const message = text();
+
+		// Ціни містять нерозривні пробіли, тож звіряємось із розміткою, а не
+		// з точним написанням суми — її перевіряє тест вище.
+		expect(message).toMatch(/<b>Разом · .+<\/b>/);
+		expect(message).not.toContain('<b>Товари');
+	});
+
 	it('безкоштовну доставку називаємо словом, а не нулем', () => {
-		expect(plain(text({ deliveryCost: 0 }))).toContain('Доставка: безкоштовно');
+		expect(plain(text({ deliveryCost: 0 }))).toContain('Доставка · безкоштовно');
 	});
 
 	it('посилання на замовлення, якщо воно відоме', () => {
@@ -172,10 +213,22 @@ describe('довге замовлення', () => {
 	it('ріже список позицій і каже, скільки лишилось за посиланням', () => {
 		const message = plain(text({ lines: many }));
 
-		expect(message).toMatch(/та ще \d+ позицій/);
+		expect(message).toMatch(/та ще \d+ позиц/);
 		// Суми й підпис мають лишитись — це те, без чого наряд марний.
-		expect(message).toContain('Разом:');
+		expect(message).toContain('Разом ·');
 		expect(message).toContain('Оплата при отриманні');
+	});
+
+	/** «81 позиція», а не «81 позицій»: число тут пишуть українською. */
+	it('число позицій узгоджене з формою слова', () => {
+		const message = plain(text({ lines: many.slice(0, 43) }));
+		const match = message.match(/та ще (\d+) (позиц\S+)/);
+
+		expect(match).not.toBeNull();
+		const [, count, form] = match!;
+		if (Number(count) % 10 === 1 && Number(count) % 100 !== 11) {
+			expect(form).toBe('позиція');
+		}
 	});
 
 	it('коротке замовлення не ріже нічого', () => {

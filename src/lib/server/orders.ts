@@ -6,7 +6,6 @@ import { db } from './db.js';
 import { resolveDeliveryCost } from './delivery-cost.js';
 import { DEFAULT_PAYMENT_PROVIDER, getPaymentProvider } from './payments.js';
 import { dispatchOrder } from './bot/orders.js';
-import { notifyNewOrder } from './telegram.js';
 
 /** Символи без 0/O/1/I — щоб номер можна було продиктувати телефоном. */
 const NUMBER_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
@@ -123,35 +122,11 @@ export async function createOrder(
 		});
 	}
 
-	// Сповіщення менеджерам свідомо не чекаємо. Замовлення вже в базі, і
-	// покупець не має дивитись на спінер, поки відповідає чужий API — а при
-	// збої ще й поки тривають повторні спроби. Помилки повідомлення гасить
-	// у собі й нічого не кидає.
-	void notifyNewOrder({
-		number: created.number,
-		customerName: input.customerName,
-		customerPhone: input.customerPhone,
-		customerEmail: input.customerEmail || null,
-		method: deliveryMethod,
-		city: input.deliveryCity,
-		address: input.deliveryAddress,
-		comment: input.comment,
-		lines: cart.lines,
-		subtotal,
-		deliveryCost,
-		total: subtotal + deliveryCost,
-		payment: provider.label,
-		orderUrl: origin ? `${origin}/order/${created.number}` : null
-	}).catch((cause: unknown) => {
-		// `notifyNewOrder` гасить помилки в себе, тож сюди не потрапляють.
-		// Пояс поверх підтяжок: кинутий виняток у промісі без `await` став би
-		// unhandled rejection і поклав би процес на суворих налаштуваннях.
-		console.error('[telegram] сповіщення не пройшло', cause);
-	});
-
-	// Те саме замовлення — персонально кожному, у кого є доступ до бота,
-	// але вже з кнопками. Теж не чекаємо: розсилка ходить у Telegram по
-	// разу на менеджера, і покупцеві нема чого на це дивитись.
+	// Замовлення — персонально кожному, у кого є доступ до бота, з
+	// кнопками статусів. Навмисно не чекаємо: розсилка ходить у Telegram
+	// по разу на менеджера, і покупець не має дивитись на спінер, поки
+	// відповідає чужий API. Помилки розсилка гасить у собі: замовлення вже
+	// в базі, і втратити продаж через Telegram гірше, ніж не сповістити.
 	void dispatchOrder(created.number, origin ?? null).catch((cause: unknown) => {
 		console.error('[bot] розсилка менеджерам не пройшла', cause);
 	});

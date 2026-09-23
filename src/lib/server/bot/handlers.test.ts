@@ -13,10 +13,16 @@ const access = {
 	redeemInvite: vi.fn(),
 	createInvite: vi.fn(),
 	listAccess: vi.fn(),
-	setAccess: vi.fn()
+	setAccess: vi.fn(),
+	leaveBot: vi.fn()
 };
 const reports = { buildReport: vi.fn() };
-const api = { sendMessage: vi.fn(), answerCallback: vi.fn() };
+const api = {
+	sendMessage: vi.fn(),
+	answerCallback: vi.fn(),
+	setChatCommands: vi.fn(),
+	clearChatCommands: vi.fn()
+};
 const orders = {
 	activeOrders: vi.fn(),
 	applyStatus: vi.fn(),
@@ -65,6 +71,9 @@ beforeEach(() => {
 	access.listAccess.mockResolvedValue([]);
 	access.createInvite.mockResolvedValue('LILY-AAAAAA');
 	access.setAccess.mockResolvedValue({ name: 'Ігор' });
+	access.leaveBot.mockResolvedValue(undefined);
+	api.setChatCommands.mockResolvedValue(undefined);
+	api.clearChatCommands.mockResolvedValue(undefined);
 });
 
 const admin = { ...actor, role: 'ADMIN' as const };
@@ -146,12 +155,18 @@ describe('кнопки', () => {
 		expect(api.answerCallback).toHaveBeenCalledWith('q1', 'Відправлене');
 	});
 
-	it('хтось устиг раніше — так і кажемо', async () => {
-		orders.applyStatus.mockResolvedValue({ ok: false, why: 'stale', status: 'CONFIRMED' });
+	/**
+	 * Картку до цієї миті вже перемальовано, тож відповідь має сказати не
+	 * «не вийшло», а який стан насправді й що список кнопок оновлено.
+	 */
+	it('стан змінили повз картку — називаємо справжній і кажемо, що оновили', async () => {
+		orders.applyStatus.mockResolvedValue({ ok: false, why: 'stale', status: 'SHIPPED' });
 
 		await handleUpdate(press('o:LL-ABC234:CONFIRMED'), null);
 
-		expect(String(api.answerCallback.mock.calls[0][1])).toContain('змінив раніше');
+		const said = String(api.answerCallback.mock.calls[0][1]);
+		expect(said).toContain('відправлене');
+		expect(said).toContain('оновлено');
 	});
 
 	it('підкинуті дані кнопки нічого не роблять', async () => {
@@ -286,5 +301,85 @@ describe('права власника', () => {
 		await handleUpdate(message('/vymknuty; DROP TABLE'), null);
 
 		expect(access.setAccess).not.toHaveBeenCalled();
+	});
+});
+
+describe('вихід із бота', () => {
+	it('доступ знімається, меню команд прибирається', async () => {
+		await handleUpdate(message('/vyity'), null);
+
+		expect(access.leaveBot).toHaveBeenCalledWith(actor);
+		expect(api.clearChatCommands).toHaveBeenCalledWith(actor.chatId);
+		expect(said()).toContain('До зустрічі');
+	});
+
+	/** Головне, що має лишитись у голові: повернутись можна лише кодом. */
+	it('пояснює, що повернутись можна тільки новим кодом', async () => {
+		await handleUpdate(message('/vyity'), null);
+
+		expect(said()).toContain('/start');
+	});
+
+	it('чужому виходити нема звідки', async () => {
+		access.findActor.mockResolvedValue(null);
+
+		await handleUpdate(message('/vyity'), null);
+
+		expect(access.leaveBot).not.toHaveBeenCalled();
+	});
+});
+
+describe('меню команд', () => {
+	/**
+	 * Меню ставиться в мить видачі доступу: раніше роль невідома, а без
+	 * ролі невідомо, що людині показувати.
+	 */
+	it('після коду зʼявляється своє меню під роль', async () => {
+		access.redeemInvite.mockResolvedValue({ ok: true, actor: admin, returning: false });
+
+		await handleUpdate(message('/start ABC123'), null);
+
+		const [chatId, commands] = api.setChatCommands.mock.calls[0];
+		expect(chatId).toBe(777);
+		expect(commands.map((item: { command: string }) => item.command)).toContain('zvit');
+	});
+
+	it('менеджеру команд власника в меню немає', async () => {
+		access.redeemInvite.mockResolvedValue({ ok: true, actor, returning: false });
+
+		await handleUpdate(message('/start ABC123'), null);
+
+		const commands = api.setChatCommands.mock.calls[0][1] as { command: string }[];
+		const names = commands.map((item) => item.command);
+		expect(names).toContain('zamovlennia');
+		expect(names).not.toContain('zvit');
+		expect(names).not.toContain('kod');
+	});
+
+	it('поганий код меню не ставить', async () => {
+		access.redeemInvite.mockResolvedValue({ ok: false, why: 'unknown' });
+
+		await handleUpdate(message('/start NOPE'), null);
+
+		expect(api.setChatCommands).not.toHaveBeenCalled();
+	});
+});
+
+describe('довідка', () => {
+	it('менеджер бачить свої команди й не бачить чужих', async () => {
+		await handleUpdate(message('/dopomoha'), null);
+
+		expect(said()).toContain('/zamovlennia');
+		expect(said()).toContain('/vyity');
+		expect(said()).not.toContain('/zvit');
+	});
+
+	it('власник бачить і свої', async () => {
+		access.findActor.mockResolvedValue(admin);
+
+		await handleUpdate(message('/dopomoha'), null);
+
+		expect(said()).toContain('/zvit');
+		expect(said()).toContain('/dostup');
 	});
 });

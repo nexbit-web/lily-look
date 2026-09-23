@@ -1,5 +1,6 @@
 import {
 	canMove,
+	canRoleEver,
 	keyboardFor,
 	statusLabel,
 	type BotRoleValue,
@@ -70,11 +71,15 @@ async function loadOrder(number: string) {
 	return db.order.findUnique({ where: { number }, select: ORDER_CARD });
 }
 
-/** «Відправлене · Олена, 17 вересня 15:42» — або просто назва стану. */
-function statusLine(order: OrderCard): string {
-	const label = statusLabel(order.status as OrderStatusValue);
+/**
+ * Хто востаннє чіпав замовлення: «Олена · 18 вересня 10:12».
+ *
+ * Порожньо, поки стан ніхто не міняв, — у новому замовленні цей рядок
+ * тільки заважав би. Подія без автора означає, що статус змінила CRM.
+ */
+function changedBy(order: OrderCard): string | null {
 	const last = order.events[0];
-	if (!last || last.status !== order.status) return `Статус: ${label}`;
+	if (!last || last.status !== order.status) return null;
 
 	const when = new Intl.DateTimeFormat('uk-UA', {
 		timeZone: 'Europe/Kyiv',
@@ -84,8 +89,7 @@ function statusLine(order: OrderCard): string {
 		minute: '2-digit'
 	}).format(last.createdAt);
 
-	const who = last.actor?.name;
-	return `Статус: ${label} · ${who ? `${who}, ` : ''}${when}`;
+	return `${last.actor?.name ?? 'CRM'} · ${when}`;
 }
 
 function toMessage(order: OrderCard, origin: string | null): OrderMessage {
@@ -116,7 +120,8 @@ function toMessage(order: OrderCard, origin: string | null): OrderMessage {
 		total: order.total,
 		payment: getPaymentProvider(order.paymentProvider).label,
 		orderUrl: origin ? `${origin}/order/${order.number}` : null,
-		status: statusLine(order),
+		status: statusLabel(order.status as OrderStatusValue),
+		changedBy: changedBy(order),
 		// Час замовлення, а не «зараз»: картку перемальовують і через добу.
 		now: order.createdAt
 	};
@@ -164,17 +169,18 @@ export async function dispatchOrder(number: string, origin: string | null): Prom
 }
 
 /**
- * Перемалювати всі копії картки під новий стан.
+ * Перемалювати всі копії картки під переданий стан.
+ *
+ * Картку приймаємо готовою, а не читаємо ще раз: після вдалого переходу
+ * новий стан і так відомий, а зайвий запит до бази тут робився б на
+ * кожне натискання.
  *
  * Помилки навмисно ковтаємо поштучно: менеджер міг видалити повідомлення
  * в себе, і це не привід валити зміну статусу, яка вже в базі.
  */
-async function refreshNotices(orderId: string, origin: string | null): Promise<void> {
-	const order = await db.order.findUnique({ where: { id: orderId }, select: ORDER_CARD });
-	if (!order) return;
-
+async function refreshNotices(order: OrderCard, origin: string | null): Promise<void> {
 	const notices = await db.botNotice.findMany({
-		where: { orderId },
+		where: { orderId: order.id },
 		select: { chatId: true, messageId: true, botUser: { select: { role: true } } }
 	});
 
@@ -198,9 +204,20 @@ export type Applied =
 /**
  * Перевести замовлення в новий стан від імені менеджера.
  *
- * Скасування навмисно не повертає товар на склад: каталогом володіє CRM,
- * і рішення про залишки має бути її. У журналі подія лишається, тож у CRM
- * видно, що сталось, і вона може повернути залишок сама.
+ * Скасування повертає товар на склад: залишки списуються в мить
+ * оформлення, і якщо їх не повернути, скасоване замовлення тихо зʼїдало б
+ * склад. Повернення йде в тій самій транзакції, що й зміна статусу, —
+ * інакше між ними можна було б впасти й лишити склад розбалансованим.
+ *
+ * Позиції без `variantId` пропускаються: варіант могли видалити в CRM
+ * після замовлення, а знімок у `OrderItem` лишився. Повертати нічого.
+ *
+ * Окремий випадок — статус змінили повз бота, в CRM. Тоді кнопка під
+ * повідомленням показує стан, якого вже немає, і натискання по ній не
+ * має просто відмовляти: картка перемальовується під справжній стан, і
+ * менеджер одразу бачить актуальні кнопки. Синхронізація ліниво, у мить
+ * натискання: опитувати базу на випадок, що CRM щось змінила, довелось би
+ * постійно й задарма.
  */
 export async function applyStatus(
 	number: string,
@@ -208,36 +225,72 @@ export async function applyStatus(
 	actor: Actor,
 	origin: string | null
 ): Promise<Applied> {
-	const order = await db.order.findUnique({
-		where: { number },
-		select: { id: true, status: true }
-	});
+	// Одне читання на весь виклик: тут і залишки для повернення, і все,
+	// з чого потім складається перемальована картка.
+	const order = await loadOrder(number);
 	if (!order) return { ok: false, why: 'missing' };
 
 	const from = order.status as OrderStatusValue;
+
 	if (!canMove(from, to, actor.role)) {
-		return { ok: false, why: from === to ? 'stale' : 'forbidden', status: from };
+		// Такого цій ролі не можна ніколи — отже, кнопка не наша.
+		if (!canRoleEver(to, actor.role)) return { ok: false, why: 'forbidden', status: from };
+
+		// Кнопка справжня, просто стан уже інший: доганяємо CRM.
+		await refreshNotices(order, origin);
+		return { ok: false, why: 'stale', status: from };
 	}
 
-	// Умова `status: from` — те саме, що й у списанні залишків: якщо стан
-	// устиг змінитись між читанням і записом, нічого не оновиться.
-	const moved = await db.order.updateMany({
-		where: { id: order.id, status: from },
-		data: { status: to }
-	});
-	if (moved.count === 0) {
-		const fresh = await db.order.findUnique({
-			where: { id: order.id },
-			select: { status: true }
+	const returning =
+		to === 'CANCELLED'
+			? order.items.filter((item): item is (typeof order.items)[number] & { variantId: string } =>
+					Boolean(item.variantId)
+				)
+			: [];
+
+	const moved = await db.$transaction(async (tx) => {
+		// Умова `status: from` — те саме, що й у списанні залишків: якщо стан
+		// устиг змінитись між читанням і записом, нічого не оновиться, і вся
+		// транзакція лишиться порожньою.
+		const changed = await tx.order.updateMany({
+			where: { id: order.id, status: from },
+			data: { status: to }
 		});
+		if (changed.count === 0) return false;
+
+		await tx.orderEvent.create({
+			data: { orderId: order.id, status: to, actorId: actor.id }
+		});
+
+		for (const item of returning) {
+			// `updateMany`, а не `update`: варіант міг зникнути з каталогу, і
+			// це не привід валити скасування замовлення.
+			await tx.productVariant.updateMany({
+				where: { id: item.variantId },
+				data: { stock: { increment: item.quantity } }
+			});
+		}
+
+		return true;
+	});
+
+	if (!moved) {
+		// Хтось устиг раніше. Стан читаємо заново — саме його треба показати.
+		const fresh = await loadOrder(number);
+		if (fresh) await refreshNotices(fresh, origin);
 		return { ok: false, why: 'stale', status: fresh?.status as OrderStatusValue };
 	}
 
-	await db.orderEvent.create({
-		data: { orderId: order.id, status: to, actorId: actor.id }
-	});
-
-	await refreshNotices(order.id, origin);
+	// Новий стан уже відомий, тож картку складаємо з того, що прочитали,
+	// а не ходимо в базу вдруге.
+	await refreshNotices(
+		{
+			...order,
+			status: to,
+			events: [{ status: to, createdAt: new Date(), actor: { name: actor.name } }]
+		},
+		origin
+	);
 
 	return { ok: true, status: to };
 }

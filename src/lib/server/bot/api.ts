@@ -23,11 +23,10 @@ const BACKOFF_MS = [700, 2500];
 /** Скільки погодимось чекати, якщо Telegram просить зачекати довго. */
 const MAX_RETRY_AFTER_MS = 20_000;
 
-export function isTelegramConfigured(): boolean {
-	return Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID);
-}
-
-/** Для бота чат не потрібен: він пише туди, звідки до нього прийшли. */
+/**
+ * Чат у налаштуваннях не потрібен: бот пише кожному особисто, туди,
+ * звідки до нього прийшли.
+ */
 export function isBotConfigured(): boolean {
 	return Boolean(env.TELEGRAM_BOT_TOKEN);
 }
@@ -54,10 +53,11 @@ function explain(status: number, description: string, chatId: string): string {
 		return 'TELEGRAM_BOT_TOKEN недійсний — візьміть токен у @BotFather (/mybots → API Token)';
 	}
 	if (status === 403) {
-		return `бот не може писати в чат ${chatId} — додайте його в групу й дайте право надсилати повідомлення`;
+		// Найчастіша причина — людина заблокувала бота або видалила чат.
+		return `бот не може писати в чат ${chatId} — імовірно, його там заблокували`;
 	}
 	if (status === 400 && /chat not found/i.test(description)) {
-		return `чат ${chatId} не знайдено — перевірте TELEGRAM_CHAT_ID (для груп він від'ємний, напр. -1001234567890)`;
+		return `чат ${chatId} не знайдено — людина, певно, видалила діалог із ботом`;
 	}
 	if (status === 400 && /can't parse entities/i.test(description)) {
 		return `Telegram не зрозумів розмітку повідомлення: ${description}`;
@@ -69,7 +69,7 @@ function explain(status: number, description: string, chatId: string): string {
 }
 
 async function attempt<T>(method: string, payload: Record<string, unknown>): Promise<Attempt<T>> {
-	const chatId = String(payload.chat_id ?? env.TELEGRAM_CHAT_ID ?? '');
+	const chatId = String(payload.chat_id ?? '');
 
 	let response: Response;
 	try {
@@ -110,7 +110,7 @@ async function attempt<T>(method: string, payload: Record<string, unknown>): Pro
 		return {
 			ok: false,
 			retry: false,
-			why: `групу перетворено на супергрупу — новий TELEGRAM_CHAT_ID: ${migrateTo}`
+			why: `чат ${chatId} переїхав — новий ідентифікатор ${migrateTo}`
 		};
 	}
 
@@ -217,4 +217,31 @@ export async function answerCallback(id: string, text?: string): Promise<void> {
 	} catch {
 		// Кнопка покрутиться й відпустить. Статус від цього не залежить.
 	}
+}
+
+/**
+ * Список команд, який Telegram показує в меню біля поля вводу.
+ *
+ * Це та сама «шпаргалка», що відкривається кнопкою зліва: людині не треба
+ * памʼятати ні команд, ні їхнього написання. Список задається окремо для
+ * кожного чату, тож менеджер бачить свої команди, власник — свої, а той,
+ * кому доступу не давали, — тільки `/start`.
+ */
+export type BotCommand = { command: string; description: string };
+
+export async function setChatCommands(
+	chatId: bigint | number | string,
+	commands: BotCommand[]
+): Promise<void> {
+	await callTelegram('setMyCommands', {
+		commands,
+		scope: { type: 'chat', chat_id: String(chatId) }
+	});
+}
+
+/** Прибрати особистий список — чат повернеться до загального. */
+export async function clearChatCommands(chatId: bigint | number | string): Promise<void> {
+	await callTelegram('deleteMyCommands', {
+		scope: { type: 'chat', chat_id: String(chatId) }
+	});
 }

@@ -78,6 +78,22 @@ export function canMove(from: OrderStatusValue, to: OrderStatusValue, role: BotR
 }
 
 /**
+ * Чи може ця роль узагалі колись зробити такий перехід — хоч із якогось
+ * стану.
+ *
+ * Потрібно, щоб відрізнити дві різні відмови, які інакше виглядають
+ * однаково. Менеджер тисне «Прийняти», а замовлення вже відправлене:
+ * з цього стану так не можна, але кнопка була справжня — просто картка
+ * застаріла, і її треба оновити. А кур'єр, у якого «Скасувати» не було
+ * ніколи, тисне його підробленими даними — ось це справжня відмова.
+ */
+export function canRoleEver(to: OrderStatusValue, role: BotRoleValue): boolean {
+	return Object.values(FLOW).some((actions) =>
+		actions.some((action) => action.to === to && action.roles.includes(role))
+	);
+}
+
+/**
  * Дані кнопки. Влазити треба в 64 байти, тому номер замовлення, а не id:
  * він і коротший, і читається в логах очима.
  */
@@ -110,4 +126,44 @@ export function keyboardFor(
 	return actionsFor(status, role).map((action) => [
 		{ text: action.label, callback_data: encodeAction(number, action.to) }
 	]);
+}
+
+/**
+ * Підказки команд для меню Telegram.
+ *
+ * Той самий список, що відкривається кнопкою біля поля вводу: людині не
+ * треба ні памʼятати команди, ні знати, як вони пишуться. Список залежить
+ * від ролі — менеджер не бачить того, чого не може, і навіть не дізнається,
+ * що воно існує.
+ */
+export type BotCommandHint = { command: string; description: string };
+
+const KEEPER_COMMANDS: BotCommandHint[] = [
+	{ command: 'zamovlennia', description: 'Активні замовлення' },
+	{ command: 'z', description: 'Знайти замовлення за номером' },
+	{ command: 'dopomoha', description: 'Що вміє бот' },
+	{ command: 'vyity', description: 'Вийти з бота' }
+];
+
+const COURIER_COMMANDS: BotCommandHint[] = [
+	{ command: 'zamovlennia', description: 'Замовлення в дорозі' },
+	{ command: 'z', description: 'Знайти замовлення за номером' },
+	{ command: 'dopomoha', description: 'Що вміє бот' },
+	{ command: 'vyity', description: 'Вийти з бота' }
+];
+
+const ADMIN_COMMANDS: BotCommandHint[] = [
+	{ command: 'zamovlennia', description: 'Активні замовлення' },
+	{ command: 'z', description: 'Знайти замовлення за номером' },
+	{ command: 'zvit', description: 'Звіт: замовлення й виторг' },
+	{ command: 'dostup', description: 'Хто має доступ' },
+	{ command: 'kod', description: 'Видати код доступу' },
+	{ command: 'dopomoha', description: 'Що вміє бот' },
+	{ command: 'vyity', description: 'Вийти з бота' }
+];
+
+export function commandsFor(role: BotRoleValue): BotCommandHint[] {
+	if (role === 'ADMIN') return ADMIN_COMMANDS;
+	if (role === 'COURIER') return COURIER_COMMANDS;
+	return KEEPER_COMMANDS;
 }

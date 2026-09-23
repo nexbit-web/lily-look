@@ -27,6 +27,7 @@ const {
 	createInvite,
 	findActor,
 	generateCode,
+	leaveBot,
 	prunePastUpdates,
 	redeemInvite,
 	setAccess
@@ -253,5 +254,60 @@ describe('прибирання', () => {
 		await expect(prunePastUpdates()).resolves.toBe(12);
 		const cutoff = db.botUpdate.deleteMany.mock.calls[0][0].where.createdAt.lt as Date;
 		expect(Date.now() - cutoff.getTime()).toBeGreaterThanOrEqual(24 * 60 * 60 * 1000 - 1000);
+	});
+});
+
+describe('вихід і повернення', () => {
+	/**
+	 * Різниця між «пішов сам» і «прибрав власник» — уся суть `leftAt`.
+	 * Перший може повернутись новим кодом, другий ні, інакше вимикач у CRM
+	 * обходився б у два повідомлення.
+	 */
+	it('вихід не видаляє рядок — журнал подій на ньому тримається', async () => {
+		await leaveBot({
+			id: 'u1',
+			telegramId: 777n,
+			chatId: 777n,
+			name: 'Олена',
+			role: 'MANAGER'
+		});
+
+		expect(db.botUser.update.mock.calls[0][0]).toMatchObject({ where: { id: 'u1' } });
+		const data = db.botUser.update.mock.calls[0][0].data;
+		expect(data.isActive).toBe(false);
+		expect(data.leftAt).toBeInstanceOf(Date);
+	});
+
+	it('той, хто вийшов сам, повертається новим кодом', async () => {
+		db.botInvite.findUnique.mockResolvedValue(invite({ role: 'COURIER' }));
+		db.botUser.findUnique.mockResolvedValue({ id: 'u1', leftAt: new Date() });
+		db.botUser.update.mockResolvedValue({ ...user, role: 'COURIER' });
+
+		const outcome = await redeemInvite('ABC123', profile);
+
+		expect(outcome).toMatchObject({ ok: true, returning: false });
+		// Оновлюємо старий рядок, а не заводимо новий.
+		expect(db.botUser.create).not.toHaveBeenCalled();
+		const data = db.botUser.update.mock.calls[0][0].data;
+		expect(data).toMatchObject({ isActive: true, leftAt: null, role: 'COURIER' });
+	});
+
+	it('того, кого прибрав власник, новий код не повертає', async () => {
+		db.botInvite.findUnique.mockResolvedValue(invite());
+		db.botUser.findUnique.mockResolvedValue({ id: 'u1', leftAt: null });
+
+		await expect(redeemInvite('ABC123', profile)).resolves.toEqual({ ok: false, why: 'taken' });
+		expect(db.botUser.update).not.toHaveBeenCalled();
+		expect(db.botUser.create).not.toHaveBeenCalled();
+	});
+
+	it('той, хто вийшов, перестає бути своїм одразу', async () => {
+		db.botUser.findFirst.mockResolvedValue(null);
+
+		await expect(findActor(777n)).resolves.toBeNull();
+		expect(db.botUser.findFirst.mock.calls[0][0].where).toMatchObject({
+			isActive: true,
+			leftAt: null
+		});
 	});
 });

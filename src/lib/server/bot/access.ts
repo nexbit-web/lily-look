@@ -25,7 +25,7 @@ export type Actor = {
 /** Хто це. `null` — доступу немає, і більше він нічого не дізнається. */
 export async function findActor(telegramId: bigint): Promise<Actor | null> {
 	const user = await db.botUser.findFirst({
-		where: { telegramId, isActive: true },
+		where: { telegramId, isActive: true, leftAt: null },
 		select: { id: true, telegramId: true, chatId: true, name: true, role: true }
 	});
 
@@ -110,14 +110,16 @@ export async function redeemInvite(
 		return { ok: false, why: invite.usedAt ? 'used' : 'expired' };
 	}
 
-	// Той самий telegram id міг бути привʼязаний і вимкнений у CRM.
-	// Повторно заводити його не можна — інакше вимкнений доступ
-	// відновлювався б новим кодом в обхід рішення власника.
-	const blocked = await db.botUser.findUnique({
+	// Той самий telegram id міг бути привʼязаний раніше. Що з ним робити,
+	// залежить від того, як він пішов: сам чи його прибрали.
+	const previous = await db.botUser.findUnique({
 		where: { telegramId: profile.telegramId },
-		select: { id: true }
+		select: { id: true, leftAt: true }
 	});
-	if (blocked) return { ok: false, why: 'taken' };
+
+	// Прибрав власник — новим кодом не повернутись, інакше вимикач у CRM
+	// не значив би нічого.
+	if (previous && !previous.leftAt) return { ok: false, why: 'taken' };
 
 	const claimed = await db.botInvite.updateMany({
 		where: { id: invite.id, usedAt: null },
@@ -126,16 +128,27 @@ export async function redeemInvite(
 	// Хтось устиг раніше — код уже не наш.
 	if (claimed.count === 0) return { ok: false, why: 'used' };
 
-	const user = await db.botUser.create({
-		data: {
-			telegramId: profile.telegramId,
-			chatId: profile.chatId,
-			name: profile.name,
-			username: profile.username,
-			role: invite.role
-		},
-		select: { id: true, telegramId: true, chatId: true, name: true, role: true }
-	});
+	const fields = {
+		chatId: profile.chatId,
+		name: profile.name,
+		username: profile.username,
+		role: invite.role,
+		isActive: true,
+		leftAt: null
+	};
+
+	// Пішов сам — оновлюємо старий рядок, а не заводимо новий: до нього
+	// привʼязаний журнал подій, і втрачати «хто що робив» не можна.
+	const user = previous
+		? await db.botUser.update({
+				where: { id: previous.id },
+				data: fields,
+				select: { id: true, telegramId: true, chatId: true, name: true, role: true }
+			})
+		: await db.botUser.create({
+				data: { telegramId: profile.telegramId, ...fields },
+				select: { id: true, telegramId: true, chatId: true, name: true, role: true }
+			});
 
 	await db.botInvite.update({ where: { id: invite.id }, data: { usedById: user.id } });
 
@@ -249,4 +262,18 @@ export async function prunePastUpdates(olderThanMs = 24 * 60 * 60 * 1000): Promi
 	});
 
 	return count;
+}
+
+/**
+ * Вийти з бота самому.
+ *
+ * Відрізняється від відкликання власником: `leftAt` каже, що людина пішла
+ * добровільно, і повернутись новим кодом їй можна. Рядок лишається на
+ * місці — до нього привʼязаний журнал, хто які замовлення вів.
+ */
+export async function leaveBot(actor: Actor): Promise<void> {
+	await db.botUser.update({
+		where: { id: actor.id },
+		data: { isActive: false, leftAt: new Date() }
+	});
 }

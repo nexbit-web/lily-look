@@ -379,10 +379,16 @@ model BotUser {
   name       String
   username   String?
 
-  role     BotRole @default(MANAGER)
+  role     BotRole   @default(MANAGER)
   /// Вимикач доступу з CRM. Знятий прапорець діє з наступного дотику:
   /// ні кнопка, ні команда більше не спрацюють.
-  isActive Boolean @default(true)
+  isActive Boolean   @default(true)
+  /// Коли людина вийшла сама (командою в боті).
+  ///
+  /// Відрізняє добровільний вихід від відкликання власником: після виходу
+  /// можна повернутись новим кодом, після відкликання — ні. Без цієї
+  /// позначки будь-хто, кого позбавили доступу, повертав би його сам.
+  leftAt   DateTime?
 
   invite  BotInvite?
   events  OrderEvent[]

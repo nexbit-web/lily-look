@@ -1,16 +1,23 @@
-import { decodeAction, isAdmin, statusLabel, type BotRoleValue } from '$lib/bot-workflow';
+import {
+	commandsFor,
+	decodeAction,
+	isAdmin,
+	statusLabel,
+	type BotRoleValue
+} from '$lib/bot-workflow';
 import type { OrderStatusValue } from '$lib/bot-workflow';
 import { formatPrice } from '$lib/money';
 import { escapeHtml } from '$lib/order-message';
 import {
 	createInvite,
 	findActor,
+	leaveBot,
 	listAccess,
 	redeemInvite,
 	setAccess,
 	type Actor
 } from './access.js';
-import { answerCallback, sendMessage } from './api.js';
+import { answerCallback, clearChatCommands, sendMessage, setChatCommands } from './api.js';
 import { activeOrders, applyStatus, orderCard, rememberNotice } from './orders.js';
 import { buildReport } from './reports.js';
 
@@ -33,20 +40,26 @@ const DENIED =
 	'Доступу немає. Якщо він має бути — попросіть у власника магазину код і надішліть <code>/start ваш-код</code>.';
 
 const HELP = [
-	'Команди:',
+	'<b>Що вміє бот</b>',
+	'',
+	'Нові замовлення приходять сюди самі. Статус міняється кнопками під повідомленням — окремих команд для цього не треба.',
+	'',
+	'<b>Команди</b>',
 	'<code>/zamovlennia</code> — активні замовлення',
 	'<code>/z LL-XXXXXX</code> — знайти замовлення за номером',
+	'<code>/dopomoha</code> — ця підказка',
+	'<code>/vyity</code> — вийти з бота',
 	'',
-	'Нові замовлення приходять сюди самі. Статус міняється кнопками під повідомленням.'
+	'Усі команди є в меню біля поля вводу — памʼятати їх не треба.'
 ].join('\n');
 
 const ADMIN_HELP = [
 	HELP,
 	'',
-	'Власнику:',
-	'<code>/zvit</code> — звіт',
+	'<b>Власнику</b>',
+	'<code>/zvit</code> — звіт: замовлення й виторг',
 	'<code>/dostup</code> — хто має доступ',
-	'<code>/kod РОЛЬ примітка</code> — видати код (MANAGER, COURIER, ADMIN)',
+	'<code>/kod РОЛЬ примітка</code> — видати код (ADMIN, MANAGER, COURIER)',
 	'<code>/vymknuty ID</code> · <code>/uvimknuty ID</code> — закрити або відкрити доступ'
 ].join('\n');
 
@@ -95,6 +108,10 @@ async function handleStart(
 	});
 
 	if (outcome.ok) {
+		// Меню команд ставимо саме тут: воно залежить від ролі, а роль стає
+		// відома тільки після того, як код погашено.
+		await setChatCommands(chatId, commandsFor(outcome.actor.role));
+
 		const greeting = outcome.returning
 			? `Ви вже маєте доступ, ${escapeHtml(outcome.actor.name)}.`
 			: `Готово, ${escapeHtml(outcome.actor.name)}. Доступ відкрито.`;
@@ -155,6 +172,26 @@ async function handleFind(actor: Actor, number: string, origin: string | null): 
 	// Картку на вимогу теж тримаємо в списку: інакше вона лишиться з
 	// кнопками від стану, який хтось уже змінив.
 	if (outcome.ok) await rememberNotice(wanted, actor, outcome.result.message_id);
+}
+
+/**
+ * Вийти з бота.
+ *
+ * Прибираємо меню команд разом із доступом: інакше в людини лишився б
+ * список того, чого вона вже не може. Повернутись можна тільки новим
+ * кодом — старий давно погашений.
+ */
+async function handleLeave(actor: Actor): Promise<void> {
+	await leaveBot(actor);
+	await clearChatCommands(actor.chatId);
+	await sendMessage(
+		actor.chatId,
+		[
+			`До зустрічі, ${escapeHtml(actor.name)}.`,
+			'',
+			'Замовлення більше не приходитимуть. Щоб повернутись, попросіть у власника новий код і надішліть <code>/start код</code>.'
+		].join('\n')
+	);
 }
 
 // ─── Команди власника ───────────────────────────────────────────────────
@@ -270,6 +307,8 @@ async function handleMessage(message: NonNullable<Update['message']>, origin: st
 
 	if (name === '/zamovlennia') return void (await handleList(actor));
 	if (name === '/z') return void (await handleFind(actor, argument, origin));
+	if (name === '/vyity') return void (await handleLeave(actor));
+	if (name === '/dopomoha') return void (await sendMessage(actor.chatId, helpFor(actor)));
 
 	if (isAdmin(actor.role)) {
 		if (name === '/zvit') return void (await sendMessage(actor.chatId, await buildReport()));
@@ -306,8 +345,10 @@ async function handleCallback(
 	}
 
 	if (outcome.why === 'stale') {
-		const now = outcome.status ? statusLabel(outcome.status) : 'інший';
-		await answerCallback(query.id, `Уже ${now.toLowerCase()} — хтось змінив раніше`);
+		// Стан змінили повз цю картку — в CRM або з іншого чату. Саму картку
+		// `applyStatus` уже перемалював, тож лишається сказати, що сталось.
+		const now = outcome.status ? statusLabel(outcome.status).toLowerCase() : 'інший';
+		await answerCallback(query.id, `Уже ${now} — картку оновлено`);
 		return;
 	}
 
