@@ -5,9 +5,9 @@ export const SITE = {
 	tagline: 'Жіночий одяг з характером',
 	description:
 		'LILY LOOK — сукні, костюми, верхній одяг і базові речі для щоденного гардеробу. Доставка по всій Україні.',
-	phone: '+38 (067) 000-00-00',
-	email: 'hello@lilylook.ua',
-	instagram: 'https://instagram.com/lilylook'
+	phone: '+38 (067) 658-34-86',
+	email: 'support@lilylook.store',
+	instagram: 'https://www.instagram.com/lily.look.ua/'
 } as const;
 
 export const CURRENCY = 'UAH';
@@ -72,7 +72,7 @@ export const MAX_CART_QUANTITY = 99;
 export const RETURN_DAYS = 14;
 
 /** Безкоштовна доставка від цієї суми (у копійках). */
-export const FREE_DELIVERY_FROM = 300_000;
+export const FREE_DELIVERY_FROM = 400_000;
 
 /**
  * Сортування каталогу.

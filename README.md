@@ -506,7 +506,7 @@ UPDATE "BotUser" SET "isActive" = false WHERE id = '...';
 
 **Что нужно сделать вручную после запуска:**
 
-1. **Заменить заглушки в `src/lib/config.ts`**: `SITE.phone`, `SITE.email`, `SITE.instagram`, `SENDER.pickupAddress`. Они уходят в подвал, на `/contacts`, в разметку магазина и в `llms.txt` — сейчас там `+38 (067) 000-00-00` и `hello@lilylook.ua`, хотя домен `.store`.
+1. **Заменить заглушки в `src/lib/config.ts`**: `SITE.phone`, `SITE.instagram`, `SENDER.pickupAddress`. Они уходят в подвал, на `/contacts`, в разметку магазина и в `llms.txt` — сейчас там, например, `+38 (067) 000-00-00`. Почта уже настоящая — `support@lilylook.store`.
 2. **Google Search Console**: подтвердить домен, отправить `/sitemap.xml`.
 3. **Google Merchant Center**: добавить фид `https://lilylook.store/merchant-feed.xml` (расписание — раз в день), указать страницу возврата `/returns`, настроить доставку по Украине. Без этого товары в Google Покупки и в товарные карточки выдачи не попадают.
 4. **Bing Webmaster Tools**: отправить тот же `/sitemap.xml`. Поиском Bing пользуются ChatGPT и Copilot — без него магазин туда не попадает.

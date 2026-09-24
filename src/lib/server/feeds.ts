@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { RETURN_DAYS, SITE } from '$lib/config';
 import { portableImageSrc } from '$lib/image';
 import { formatPrice } from '$lib/money';
@@ -45,6 +46,42 @@ const GOOGLE_CATEGORY_CLOTHING = '1604';
 const EXTRA_IMAGES = 10;
 
 /**
+ * Найдовший `id`, який Merchant Center приймає без попередження. Рахує він
+ * байти UTF-8, а не літери: артикул на 40 знаків, де половина кирилицею,
+ * для нього вже задовгий.
+ */
+const MERCHANT_ID_BYTES = 50;
+const MERCHANT_ID_HASH = 8;
+
+/**
+ * `id` позиції у фіді — артикул варіанта, як радить Google.
+ *
+ * Артикули CRM складає з назви й кольору, тож довгі виходять за ліміт:
+ * `dvokolirna-demisezonna-kurtka-oversaiz-xxl-temnyi-khaki-z-olyvkovym` —
+ * 67 байт. Просто обрізати не можна: у двох розмірів однієї моделі
+ * початок спільний, і різниця могла б лишитись у відрізаному хвості.
+ * Тому довгий артикул скорочуємо до впізнаваного початку й дописуємо хеш
+ * повного артикула. Хеш той самий щодня — для Google це той самий товар
+ * зі своєю історією, а не новий.
+ */
+export function merchantId(sku: string): string {
+	if (Buffer.byteLength(sku) <= MERCHANT_ID_BYTES) return sku;
+
+	const budget = MERCHANT_ID_BYTES - MERCHANT_ID_HASH - 1;
+	let prefix = '';
+	let bytes = 0;
+	// По символах, а не по байтах: інакше кирилична літера розрізалась би навпіл.
+	for (const char of sku) {
+		bytes += Buffer.byteLength(char);
+		if (bytes > budget) break;
+		prefix += char;
+	}
+
+	const hash = createHash('sha256').update(sku).digest('hex').slice(0, MERCHANT_ID_HASH);
+	return `${prefix.replace(/-+$/, '')}-${hash}`;
+}
+
+/**
  * Одна позиція фіду — один варіант (колір + розмір).
  *
  * Так хоче Merchant Center для одягу: кожен розмір — окремий товар зі
@@ -66,7 +103,7 @@ function merchantItem(
 	const onSale = product.compareAt !== null && variant.price === product.price;
 
 	const fields: [string, string | undefined][] = [
-		['g:id', variant.sku],
+		['g:id', merchantId(variant.sku)],
 		['g:item_group_id', product.slug],
 		['g:title', `${product.name} — ${variant.color}, розмір ${variant.size}`],
 		['g:description', product.description],

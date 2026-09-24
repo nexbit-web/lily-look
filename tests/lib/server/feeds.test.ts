@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { FeedProduct } from '$lib/server/catalog';
-import { llmsTxt, merchantFeed } from '$lib/server/feeds';
+import { llmsTxt, merchantFeed, merchantId } from '$lib/server/feeds';
 
 /**
  * Фіди для Google Merchant Center і ІІ-асистентів.
@@ -103,6 +103,55 @@ describe('фід Google Merchant', () => {
 
 	it('товар без жодного фото у фід не йде', () => {
 		expect(items(merchantFeed(ORIGIN, [{ ...coat, images: [] }]))).toHaveLength(0);
+	});
+});
+
+/** Артикули з першого звіту Merchant Center — саме на них він поскаржився. */
+describe('id позиції у фіді', () => {
+	const bytes = (text: string) => Buffer.byteLength(text);
+	const long = 'dvokolirna-demisezonna-kurtka-oversaiz-xxl-temnyi-khaki-z-olyvkovym';
+
+	it('короткий артикул іде як є — його видно й у CRM, і в Merchant Center', () => {
+		expect(merchantId('NORD-S-CH')).toBe('NORD-S-CH');
+	});
+
+	it('довгий — не більше 50 байт і з тим самим початком', () => {
+		const id = merchantId(long);
+
+		expect(bytes(id)).toBeLessThanOrEqual(50);
+		expect(id.startsWith('dvokolirna-demisezonna-kurtka-oversaiz-xx')).toBe(true);
+	});
+
+	it('ліміт рахується в байтах: 40 знаків із кирилицею — теж задовго', () => {
+		const sku = 'SOROCHKA-OVERSIZE-JUNE-L-БЛАКИТНА-СМУЖКА';
+		const id = merchantId(sku);
+
+		expect(sku.length).toBeLessThan(50);
+		expect(bytes(id)).toBeLessThanOrEqual(50);
+		// Обрізано по літерах: початок id — справді початок артикула.
+		expect(sku.startsWith(id.slice(0, -9))).toBe(true);
+		expect(id.startsWith('SOROCHKA-OVERSIZE-JUNE-L-')).toBe(true);
+	});
+
+	/** Інакше Google щоразу бачив би новий товар і губив його історію. */
+	it('той самий артикул — той самий id при кожному оновленні фіду', () => {
+		expect(merchantId(long)).toBe(merchantId(long));
+	});
+
+	it('розміри однієї моделі зі спільним початком не зливаються', () => {
+		const sizes = ['l', 'xl', 'xxl', '3xl', '4khl'].map((size) =>
+			merchantId(`dvokolirna-demisezonna-kurtka-oversaiz-temnyi-khaki-z-olyvkovym-${size}`)
+		);
+
+		expect(new Set(sizes).size).toBe(sizes.length);
+	});
+
+	it('у фіді стоїть уже скорочений id', () => {
+		const [item] = items(
+			merchantFeed(ORIGIN, [{ ...coat, variants: [{ ...coat.variants[0], sku: long }] }])
+		);
+
+		expect(field(item, 'g:id')).toBe(merchantId(long));
 	});
 });
 
