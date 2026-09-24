@@ -107,7 +107,15 @@ async function buildHome() {
 	return { banners, categories, sale, newArrivals, sections };
 }
 
-export const load: PageServerLoad = async ({ setHeaders }) => {
-	setHeaders({ 'cache-control': 'public, max-age=0, s-maxage=60' });
+/**
+ * Кешуємо в пам'яті процесу, а не на CDN.
+ *
+ * Спільний кеш (`s-maxage`) тут був би помилкою: у HTML сторінки зашитий
+ * лічильник кошика з шапки, а CDN хостингу віддає збережену копію всім
+ * підряд, не дивлячись на куки. Покупець із трьома речами в кошику бачив
+ * би нуль — або чужі п'ять. Дорога частина головної — запити в базу — і
+ * так закешована тут, тож без CDN сторінка лише трохи довше йде мережею.
+ */
+export const load: PageServerLoad = async () => {
 	return cached('home', CATALOG_CACHE_MS, buildHome);
 };

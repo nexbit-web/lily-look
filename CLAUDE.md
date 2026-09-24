@@ -55,6 +55,9 @@ npm run db:studio      # GUI к базе
 | Правила статусов заказа       | `src/lib/bot/workflow.ts`    |
 | Доставка, размеры, сортировки | `src/lib/config.ts`          |
 | Валидация форм                | `src/lib/schemas.ts`         |
+| Разметка Schema.org, SEO      | `src/lib/server/seo.ts`      |
+| Фид Merchant, llms.txt        | `src/lib/server/feeds.ts`    |
+| Условия магазина словами      | `src/lib/store-facts.ts`     |
 | Схема БД                      | `prisma/schema.prisma`       |
 | Тесты                         | `tests/` (зеркало `src/`)    |
 | Демо-данные                   | `prisma/seed.ts`             |
@@ -69,3 +72,6 @@ npm run db:studio      # GUI к базе
 - Каталог ведёт внешняя CRM через ту же базу; сайт пишет только в `Cart`/`Order`. Контракт (что куда писать, как работают скидки и наличие) — в README, раздел «Витрина и CRM».
 - `/catalog` без параметров — витрина категорий (фото из `Category.imageUrl`); списком товаров он становится только при поиске, `?sale=1` или фильтрах.
 - Правило `svelte/no-navigation-without-resolve` отключено намеренно — приложение живёт в корне домена.
+- **Никакого `s-maxage` на HTML-страницах.** CDN Hostinger отдаёт закешированную страницу всем, не глядя на куки, а в шапке зашит счётчик корзины. Кешируй данные в памяти (`cached()`), а `s-maxage` ставь только на ответы без личного: sitemap, фиды, `/api/category`.
+- Условия магазина (доставка, оплата, возврат) формулируются только в `store-facts.ts` — их читают страницы условий и `llms.txt`. Числа при этом живут в `config.ts`.
+- Фото для чужих систем (фид, `og:image`) — через `portableImageSrc` (JPEG), не `imageSrc` (`f_auto` может отдать AVIF, который Merchant Center не принимает).

@@ -69,9 +69,17 @@
 		<CategoryGrid categories={data.categories} />
 	{:else}
 		{@const activeFilters = data.filters.sizes.length + data.filters.colors.length}
-		<header class="mb-6 flex flex-wrap items-baseline justify-between gap-3">
-			<h1 class="font-heading text-4xl">{title}</h1>
-			<p class="text-sm text-muted-foreground tabular-nums">{totalLabel(data.total)}</p>
+		<header class="mb-6">
+			<div class="flex flex-wrap items-baseline justify-between gap-3">
+				<h1 class="font-heading text-4xl">{title}</h1>
+				<p class="text-sm text-muted-foreground tabular-nums">{totalLabel(data.total)}</p>
+			</div>
+			<!-- Факти про категорію одним абзацом: ціни, доставка, обмін. Їх
+			     цитують пошуковики й ІІ-асистенти, а покупцю вони відповідають
+			     на «скільки коштує й коли привезуть» ще до першої картки. -->
+			{#if data.intro}
+				<p class="mt-3 max-w-3xl text-sm text-muted-foreground">{data.intro}</p>
+			{/if}
 		</header>
 
 		<!-- Панель керування: на телефоні фільтри ховаються в шторку, щоб не
@@ -139,6 +147,9 @@
 						<Button href="/catalog" variant="outline" class="mt-6">До категорій</Button>
 					</div>
 				{:else}
+					<!-- Заголовок для структури, а не для ока: у карток h3, і без h2 між
+					     ними й h1 скрінрідер бачить дірку в структурі сторінки. -->
+					<h2 class="sr-only">Товари</h2>
 					<ProductGrid products={data.items} priority={4} />
 
 					{#if data.pageCount > 1}

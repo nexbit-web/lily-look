@@ -3,6 +3,9 @@ import type { ProductDetail } from '$lib/types';
 import { describe, expect, it } from 'vitest';
 import {
 	breadcrumbsNode,
+	categoryDescription,
+	categoryHeading,
+	categoryIntro,
 	itemListNode,
 	productNode,
 	serializeJsonLd,
@@ -252,5 +255,108 @@ describe('вставка в HTML', () => {
 		expect(graph['@context']).toBe('https://schema.org');
 		expect(graph['@graph']).toHaveLength(2);
 		expect(graph['@graph'][0].name).toBeTruthy();
+	});
+});
+
+describe('знижка в розмітці', () => {
+	type Offer = { price: string; priceSpecification?: Record<string, unknown> };
+
+	/** Пропозиції варіантів — у тому порядку, в якому їх бачить Google. */
+	function variantOffers(detail: ProductDetail): Offer[] {
+		const node = productNode(ORIGIN, detail) as Record<string, unknown>;
+		return (node.hasVariant as { offers: Offer }[]).map((variant) => variant.offers);
+	}
+
+	/** Закреслена ціна в картці Google — лише та, що закреслена й на сайті. */
+	it('варіант зі спільною ціною показує стару ціну закресленою', () => {
+		const [offer] = variantOffers(product);
+
+		expect(offer.price).toBe('2199.00');
+		expect(offer.priceSpecification).toEqual({
+			'@type': 'UnitPriceSpecification',
+			priceType: 'https://schema.org/StrikethroughPrice',
+			price: '2999.00',
+			priceCurrency: 'UAH'
+		});
+	});
+
+	it('без знижки закресленої ціни немає', () => {
+		const [offer] = variantOffers({ ...product, compareAt: null });
+
+		expect(offer.priceSpecification).toBeUndefined();
+	});
+
+	/**
+	 * Власна ціна варіанта не успадковує стару ціну товару: закреслити
+	 * 2 999 над варіантом за 2 500 означало б вигадати знижку.
+	 */
+	it('варіант із власною ціною знижки товару не отримує', () => {
+		const [own, shared] = variantOffers({
+			...product,
+			variants: [{ ...product.variants[0], price: 250_000 }, product.variants[1]]
+		});
+
+		expect(own.priceSpecification).toBeUndefined();
+		expect(shared.priceSpecification).toBeDefined();
+	});
+
+	it('звичайний товар з одним розміром теж показує знижку', () => {
+		const node = productNode(ORIGIN, { ...product, variants: [product.variants[0]] }) as Record<
+			string,
+			unknown
+		>;
+		const offer = node.offers as Offer;
+
+		expect(node['@type']).toBe('Product');
+		expect(offer.priceSpecification?.price).toBe('2999.00');
+	});
+});
+
+describe('тексти категорії', () => {
+	it('заголовок уточнює, що одяг жіночий, — так його й шукають', () => {
+		expect(categoryHeading('Демісезонні куртки')).toBe('Жіночі демісезонні куртки');
+	});
+
+	it('«жіночі» двічі не пишемо', () => {
+		expect(categoryHeading('Жіночі сукні')).toBe('Жіночі сукні');
+	});
+
+	it('вступ бере ціни й кількість з каталогу, а не вигадує', () => {
+		const text = categoryIntro('Пальто', 5, { min: 189_900, max: 349_900 });
+
+		expect(text).toContain('Жіночі пальто');
+		expect(text).toContain('5 моделей у наявності');
+		expect(text).toContain('від 1\u00a0899\u00a0грн до 3\u00a0499\u00a0грн');
+		expect(text).toContain(`${RETURN_DAYS} днів`);
+	});
+
+	it('одна ціна на всю категорію — без «від і до»', () => {
+		expect(categoryIntro('Костюми', 1, { min: 259_900, max: 259_900 })).toContain(
+			'1 модель у наявності, ціна 2\u00a0599\u00a0грн'
+		);
+	});
+
+	it('опис для видачі вміщується в те, що Google показує без обрізання', () => {
+		const text = categoryDescription('Демісезонні куртки', 10, { min: 189_900, max: 349_900 });
+
+		expect(text.length).toBeLessThanOrEqual(160);
+		expect(text).toContain('10 моделей');
+	});
+});
+
+describe('невидимі розриви рядка', () => {
+	/**
+	 * U+2028 і U+2029 у старих рушіях закінчують рядок посеред JSON. Назва,
+	 * скопійована з Word, приносить їх легко — тож у виході лишається тільки
+	 * текстова послідовність.
+	 */
+	it('не потрапляють у HTML як є', () => {
+		const script = serializeJsonLd([
+			productNode(ORIGIN, { ...product, name: 'Сукня\u2028Olivia\u2029' })
+		]);
+
+		expect(script).not.toMatch(/[\u2028\u2029]/);
+		expect(script).toContain('\\u2028');
+		expect(parse(script)['@graph'][0].name).toBe('Сукня\u2028Olivia\u2029');
 	});
 });

@@ -6,7 +6,21 @@
 	import { cn } from '$lib/utils';
 	import TagIcon from '@lucide/svelte/icons/tag';
 
-	let { product, priority = false }: { product: ProductCard; priority?: boolean } = $props();
+	let {
+		product,
+		priority = false,
+		lead = false
+	}: {
+		product: ProductCard;
+		priority?: boolean;
+		/**
+		 * Перша картка сітки на першому екрані. Її фото — найбільший елемент сторінки
+		 * каталогу, і саме по ньому Google міряє швидкість (LCP). `eager` лише не
+		 * відкладає запит, а `fetchpriority` ставить його попереду скриптів і сусідніх
+		 * фото. Тільки одній картці: коли «важливі» всі, важливої немає.
+		 */
+		lead?: boolean;
+	} = $props();
 
 	const discount = $derived(discountPercent(product.price, product.compareAt));
 
@@ -68,6 +82,7 @@
 				sizes={SIZES}
 				alt={product.image.alt}
 				loading={priority ? 'eager' : 'lazy'}
+				fetchpriority={lead ? 'high' : undefined}
 				decoding="async"
 				onload={() => (loaded = true)}
 				onerror={(event) => product.image && fallbackToOriginal(event, product.image.url)}

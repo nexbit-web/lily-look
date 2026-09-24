@@ -1,6 +1,8 @@
 import { IMAGE_LARGE, imageSrc } from '$lib/image';
 import { framesForColor } from '$lib/product-images';
 import { deliveryMethod, FREE_DELIVERY_FROM, RETURN_DAYS, SENDER, SITE } from '$lib/config';
+import { formatPrice } from '$lib/money';
+import { plural } from '$lib/plural';
 import type { ProductCard, ProductDetail } from '$lib/types';
 
 /**
@@ -135,18 +137,47 @@ function offerTerms(origin: string) {
 			applicableCountry: 'UA',
 			returnPolicyCategory: 'https://schema.org/MerchantReturnFiniteReturnWindow',
 			merchantReturnDays: RETURN_DAYS,
-			returnMethod: 'https://schema.org/ReturnByMail'
+			returnMethod: 'https://schema.org/ReturnByMail',
+			// Сторінка з умовами: Google веде туди з картки товару, а Merchant
+			// Center без неї не приймає політику повернення.
+			merchantReturnLink: absolute(origin, '/returns')
 		},
 		seller: { '@id': storeId(origin) }
 	};
 }
 
-function offerNode(origin: string, url: string, price: number, inStock: boolean) {
+/**
+ * Стара ціна поруч із новою: з нею Google може показати знижку прямо в
+ * картці товару — закреслена сума й нова поруч. Береться рівно та, що
+ * закреслена на сайті: за «знижку», якої покупець не бачить, Google
+ * знімає картки з видачі.
+ */
+function strikethrough(price: number, compareAt: number | null) {
+	if (!compareAt || compareAt <= price) return {};
+
+	return {
+		priceSpecification: {
+			'@type': 'UnitPriceSpecification',
+			priceType: 'https://schema.org/StrikethroughPrice',
+			price: money(compareAt),
+			priceCurrency: 'UAH'
+		}
+	};
+}
+
+function offerNode(
+	origin: string,
+	url: string,
+	price: number,
+	inStock: boolean,
+	compareAt: number | null = null
+) {
 	return {
 		'@type': 'Offer',
 		url,
 		priceCurrency: 'UAH',
 		price: money(price),
+		...strikethrough(price, compareAt),
 		availability: inStock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
 		itemCondition: 'https://schema.org/NewCondition',
 		...offerTerms(origin)
@@ -212,7 +243,13 @@ export function productNode(origin: string, product: ProductDetail): JsonLdNode 
 			'@type': 'Product',
 			...base,
 			...(variant ? { sku: variant.sku, mpn: variant.sku } : {}),
-			offers: offerNode(origin, url, variant?.price ?? product.price, Boolean(variant))
+			offers: offerNode(
+				origin,
+				url,
+				variant?.price ?? product.price,
+				Boolean(variant),
+				product.compareAt
+			)
 		};
 	}
 
@@ -233,7 +270,15 @@ export function productNode(origin: string, product: ProductDetail): JsonLdNode 
 			brand,
 			size: variant.size,
 			color: variant.color,
-			offers: offerNode(origin, url, variant.price, variant.stock > 0)
+			// Стара ціна відома лише для товару цілком. Варіант із власною ціною
+			// її не успадковує — закреслити там нема що.
+			offers: offerNode(
+				origin,
+				url,
+				variant.price,
+				variant.stock > 0,
+				variant.price === product.price ? product.compareAt : null
+			)
 		}))
 	};
 }
@@ -274,8 +319,67 @@ export function serializeJsonLd(nodes: JsonLdNode[]): string {
 		.replace(/</g, '\\u003c')
 		.replace(/>/g, '\\u003e')
 		.replace(/&/g, '\\u0026')
-		.replace(/\u2028/g, '\u2028')
-		.replace(/\u2029/g, '\u2029');
+		// \u041f\u043e\u0434\u0432\u0456\u0439\u043d\u0438\u0439 \u0441\u043b\u0435\u0448 \u2014 \u043d\u0435 \u043e\u043f\u0438\u0441\u043a\u0430: \u043f\u043e\u0442\u0440\u0456\u0431\u0435\u043d \u0442\u0435\u043a\u0441\u0442 `\u2028`, \u0430 \u043d\u0435 \u0441\u0430\u043c \u0441\u0438\u043c\u0432\u043e\u043b.
+		// \u041e\u0434\u0438\u043d\u0430\u0440\u043d\u0438\u0439 \u0434\u0430\u0432 \u0431\u0438 \u0432 \u0440\u044f\u0434\u043a\u0443 \u0437\u0430\u043c\u0456\u043d\u0438 \u0442\u043e\u0439 \u0441\u0430\u043c\u0438\u0439 \u043d\u0435\u0432\u0438\u0434\u0438\u043c\u0438\u0439 \u0440\u043e\u0437\u0440\u0438\u0432 \u0440\u044f\u0434\u043a\u0430,
+		// \u0456 \u0437\u0430\u043c\u0456\u043d\u0430 \u043d\u0435 \u0440\u043e\u0431\u0438\u043b\u0430 \u0431 \u043d\u0456\u0447\u043e\u0433\u043e.
+		.replace(/\u2028/g, '\\u2028')
+		.replace(/\u2029/g, '\\u2029');
 
 	return `<script type="application/ld+json">${payload}</script>`;
+}
+
+// ─── Тексти сторінки категорії ───────────────────────────────────────────
+
+/**
+ * Заголовок категорії в тому вигляді, як її шукають: «жіночі демісезонні
+ * куртки», а не голе «Демісезонні куртки». Назва в CRM коротка, бо стоїть
+ * у меню, — а в пошуку людина майже завжди уточнює, що шукає жіноче.
+ *
+ * Якщо «жіноч» у назві вже є, нічого не додаємо: «Жіночі жіночі сукні»
+ * виглядали б як зламаний шаблон.
+ */
+export function categoryHeading(name: string): string {
+	if (/жіноч/i.test(name)) return name;
+	return `Жіночі ${name.charAt(0).toLowerCase()}${name.slice(1)}`;
+}
+
+/** Ціни — у копійках, як і скрізь. */
+export type PriceRange = { min: number; max: number };
+
+function priceSpan(range: PriceRange | null): string {
+	if (!range) return '';
+	if (range.min === range.max) return `, ціна ${formatPrice(range.min)}`;
+	return `, від ${formatPrice(range.min)} до ${formatPrice(range.max)}`;
+}
+
+function modelsInStock(total: number): string {
+	return `${total} ${plural(total, 'модель', 'моделі', 'моделей')} у наявності`;
+}
+
+/**
+ * Вступ під заголовком категорії.
+ *
+ * Лише факти, які вже є в базі й у налаштуваннях: скільки моделей, у якому
+ * діапазоні ціни, як швидко й за скільки доставка, скільки днів на обмін.
+ * Саме такі факти цитують ІІ-асистенти, коли їх питають «де купити», і
+ * саме за них пошуковик відрізняє сторінку категорії від порожньої сітки.
+ * Вигадувати тут нічого не можна: текст оновлюється разом із каталогом.
+ */
+export function categoryIntro(name: string, total: number, range: PriceRange | null): string {
+	const branch = deliveryMethod('NOVA_POSHTA_BRANCH');
+	const [from, to] = branch.days;
+
+	return [
+		`${categoryHeading(name)} від ${SITE.name}: ${modelsInStock(total)}${priceSpan(range)}.`,
+		`Доставка Новою Поштою по всій Україні за ${from}–${to} ${plural(to, 'день', 'дні', 'днів')}, безкоштовно від ${formatPrice(FREE_DELIVERY_FROM)}.`,
+		`Обмін і повернення — ${RETURN_DAYS} ${plural(RETURN_DAYS, 'день', 'дні', 'днів')}.`
+	].join(' ');
+}
+
+/**
+ * Опис для видачі — коротша версія вступу. Google показує близько 160
+ * символів, і ціна з кількістю мають вміститись у них першими.
+ */
+export function categoryDescription(name: string, total: number, range: PriceRange | null): string {
+	return `${categoryHeading(name)} — ${modelsInStock(total)}${priceSpan(range)}. Доставка по Україні, обмін ${RETURN_DAYS} ${plural(RETURN_DAYS, 'день', 'дні', 'днів')}.`;
 }

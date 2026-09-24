@@ -23,3 +23,36 @@ export function framesForColor<T extends { color: string | null }>(
 
 	return images.filter((image) => image.color === color || image.color === null);
 }
+
+/**
+ * Заглушки, які трапляються в полі підпису, коли його заповнюють «аби було».
+ * Порівнюється весь підпис цілком, а не пошук підрядка: «Тестер кольору» —
+ * нормальний підпис, «Тест2» — ні.
+ */
+const PLACEHOLDER_ALT = /^(тест|test|фото|photo|image|img|картинка|зображення)[\s_-]*\d*$/i;
+
+/**
+ * Чи можна показати підпис із CRM як є.
+ *
+ * Мінімум два слова з літер: одне слово («NBoy», «Куртка») нічого не
+ * описує ні скрінрідеру, ні пошуку по картинках.
+ */
+function meaningfulAlt(alt: string | null): alt is string {
+	const text = alt?.trim() ?? '';
+	if (text === '' || PLACEHOLDER_ALT.test(text)) return false;
+	return (text.match(/\p{L}{2,}/gu) ?? []).length >= 2;
+}
+
+/**
+ * Підпис до фото товару.
+ *
+ * Підпис читають троє: скрінрідер, Google Картинки й прев'ю посилання в
+ * месенджерах. Усім трьом «Тест2» шкодить однаково, а поле в CRM саме так
+ * інколи й заповнюють. Тому підпис із CRM береться лише тоді, коли він
+ * справді щось описує, а інакше складається з того, що точно правда:
+ * назви товару й кольору кадру.
+ */
+export function imageAlt(alt: string | null, name: string, color: string | null): string {
+	if (meaningfulAlt(alt)) return alt.trim();
+	return color ? `${name} — ${color.toLowerCase()}` : name;
+}

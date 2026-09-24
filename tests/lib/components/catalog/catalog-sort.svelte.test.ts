@@ -44,7 +44,7 @@ describe('сортування каталогу', () => {
 			'aria-current',
 			'true'
 		);
-		expect(screen.getByRole('link', { name: /Спочатку нові/ })).not.toHaveAttribute('aria-current');
+		expect(screen.getByRole('link', { name: /Новинки/ })).not.toHaveAttribute('aria-current');
 	});
 
 	it('на екрані — тільки «Новинки» і «Ціна», напрям показує стрілка', () => {
@@ -55,9 +55,22 @@ describe('сортування каталогу', () => {
 		// Два однакові написи мають різні доступні імена — інакше їх не розрізнити
 		// ні скрінрідером, ні в підказці.
 		expect(screen.getAllByRole('link').map((item) => item.getAttribute('aria-label'))).toEqual([
-			'Спочатку нові надходження',
+			'Новинки: спочатку нові надходження',
 			'Ціна: від меншої до більшої',
 			'Ціна: від більшої до меншої'
 		]);
+	});
+
+	/**
+	 * Доступне імʼя має містити видимий напис (WCAG 2.5.3): хто керує голосом,
+	 * каже те, що бачить, і кнопка з іншою назвою для нього не існує.
+	 */
+	it('підказка починається з того, що написано на екрані', () => {
+		render(CatalogSort, { sort: 'new' });
+
+		for (const link of screen.getAllByRole('link')) {
+			const visible = link.textContent?.trim() ?? '';
+			expect(link.getAttribute('aria-label')?.startsWith(visible)).toBe(true);
+		}
 	});
 });

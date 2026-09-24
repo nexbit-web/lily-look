@@ -13,8 +13,14 @@ const db = {
 
 vi.mock('$lib/server/db', () => ({ db }));
 
-const { getProduct, listCategoryCards, listCategoryProducts, listProducts, listSale } =
-	await import('$lib/server/catalog');
+const {
+	getProduct,
+	listCategories,
+	listCategoryCards,
+	listCategoryProducts,
+	listProducts,
+	listSale
+} = await import('$lib/server/catalog');
 
 /** Рядок товару в тому вигляді, в якому його віддає Prisma. */
 const row = (patch: Record<string, unknown> = {}) => ({
@@ -322,6 +328,21 @@ describe('listCategoryCards', () => {
 			variants: { some: { isActive: true, stock: { gt: 0 } } }
 		});
 		expect(args.orderBy).toEqual([{ position: 'asc' }, { name: 'asc' }]);
+	});
+});
+
+describe('меню категорій', () => {
+	/**
+	 * Меню є на кожній сторінці. Порожня категорія в ньому — це десятки
+	 * посилань на сторінку «нічого не знайшли».
+	 */
+	it('категорія без товарів у меню не потрапляє', async () => {
+		db.category.findMany.mockResolvedValue([
+			category({ slug: 'pukhovyky', name: 'Пуховики', _count: { products: 0 } }),
+			category()
+		]);
+
+		expect(await listCategories()).toEqual([{ slug: 'sukni', name: 'Сукні', productCount: 4 }]);
 	});
 });
 

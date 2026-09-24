@@ -80,9 +80,11 @@ export const FREE_DELIVERY_FROM = 300_000;
  * `label` — те, що бачить покупець (коротко, без «дешевші/дорожчі»);
  * напрям ціни показує стрілка. `hint` іде в title і aria-label — інакше
  * два пункти «Ціна» звучали б у скрінрідері однаково.
+ * Підказка мусить починатись із самого `label`: той, хто керує голосом, каже
+ * «натисни Новинки», і без цього слова в назві кнопку не знайде.
  */
 export const SORT_OPTIONS = [
-	{ value: 'new', label: 'Новинки', direction: null, hint: 'Спочатку нові надходження' },
+	{ value: 'new', label: 'Новинки', direction: null, hint: 'Новинки: спочатку нові надходження' },
 	{ value: 'price-asc', label: 'Ціна', direction: 'asc', hint: 'Ціна: від меншої до більшої' },
 	{ value: 'price-desc', label: 'Ціна', direction: 'desc', hint: 'Ціна: від більшої до меншої' }
 ] as const;

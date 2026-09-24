@@ -8,6 +8,7 @@
 	import ProductGrid from '$lib/components/product/product-grid.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { FREE_DELIVERY_FROM, RETURN_DAYS, SITE } from '$lib/config';
+	import { DISPATCH_CUTOFF_HOUR } from '$lib/delivery-estimate';
 	import { formatPrice } from '$lib/money';
 	import { plural } from '$lib/plural';
 	import type { PageProps } from './$types';
@@ -21,11 +22,26 @@
 	 */
 	const readySections = $derived(data.sections.filter((section) => section.products).length);
 
+	/**
+	 * Що магазин продає — зі справжнього каталогу, а не зашитим списком.
+	 *
+	 * Цей рядок йде в h1 і в опис у видачі, і саме його перекаже ІІ-асистент
+	 * на «що продає LILY LOOK». Зашиті «сукні й трикотаж» брехали б, щойно їх
+	 * розібрали. Беремо найнаповненіші категорії: вони й є обличчям асортименту.
+	 */
+	const assortment = $derived(
+		[...data.categories]
+			.sort((a, b) => b.productCount - a.productCount)
+			.slice(0, 4)
+			.map((category) => category.name.toLowerCase())
+			.join(', ') || 'верхній одяг'
+	);
+
 	/** Аргументи проти вагання — рівно ті, через які кидають кошик. */
 	const assurances = [
 		{
 			title: `Безкоштовна доставка від ${formatPrice(FREE_DELIVERY_FROM)}`,
-			text: 'Нова Пошта по всій Україні, відправка того ж дня до 15:00.'
+			text: `Нова Пошта по всій Україні, відправка того ж дня до ${DISPATCH_CUTOFF_HOUR}:00.`
 		},
 		{
 			title: `Обмін і повернення ${RETURN_DAYS} ${plural(RETURN_DAYS, 'день', 'дні', 'днів')}`,
@@ -40,7 +56,7 @@
 
 <PageMeta
 	title="{SITE.name} — жіночий одяг з доставкою по Україні"
-	description="Сукні, костюми, верхній одяг і трикотаж від {SITE.name}. Доставка Новою Поштою по всій Україні, оплата при отриманні, обмін і повернення {RETURN_DAYS} {plural(
+	description="Жіночий одяг {SITE.name}: {assortment}. Доставка Новою Поштою по всій Україні, оплата при отриманні, обмін і повернення {RETURN_DAYS} {plural(
 		RETURN_DAYS,
 		'день',
 		'дні',
@@ -57,7 +73,7 @@
 		Тому h1 лишається в розмітці, але не на екрані.
 	-->
 	<h1 class="sr-only">
-		{SITE.name} — жіночий одяг: сукні, костюми, верхній одяг з доставкою по Україні
+		{SITE.name} — жіночий одяг: {assortment} з доставкою по Україні
 	</h1>
 
 	<HeroSlider banners={data.banners} />

@@ -1,8 +1,21 @@
 import { RETURN_DAYS, SITE, SORT_OPTIONS, type SortOption } from '$lib/config';
 import { plural } from '$lib/plural';
-import { getCategory, listCategoryCards, listFacets, listProducts } from '$lib/server/catalog';
+import {
+	categoryPriceRange,
+	getCategory,
+	listCategoryCards,
+	listFacets,
+	listProducts
+} from '$lib/server/catalog';
 import { searchProductIds } from '$lib/server/search';
-import { breadcrumbsNode, itemListNode } from '$lib/server/seo';
+import {
+	breadcrumbsNode,
+	categoryDescription,
+	categoryHeading,
+	categoryIntro,
+	itemListNode,
+	type PriceRange
+} from '$lib/server/seo';
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 
@@ -21,6 +34,7 @@ type SeoInput = {
 	pathname: string;
 	sizes: string[];
 	colors: string[];
+	range: PriceRange | null;
 };
 
 /**
@@ -33,7 +47,7 @@ type SeoInput = {
  *    розпродаж і номер сторінки. Решта параметрів відкидається.
  */
 function buildSeo(input: SeoInput) {
-	const { category, query, sale, page, total, pathname, sizes, colors } = input;
+	const { category, query, sale, page, total, pathname, sizes, colors, range } = input;
 
 	const params = new URLSearchParams();
 	if (sale) params.set('sale', '1');
@@ -55,7 +69,7 @@ function buildSeo(input: SeoInput) {
 	if (sale) {
 		return {
 			title: `Знижки на жіночий одяг${pageSuffix} — ${SITE.name}`,
-			description: `Розпродаж жіночого одягу: ${total} моделей за зниженою ціною. Доставка по Україні, обмін ${RETURN_DAYS} ${plural(RETURN_DAYS, 'день', 'дні', 'днів')}.`,
+			description: `Розпродаж жіночого одягу: ${total} ${plural(total, 'модель', 'моделі', 'моделей')} за зниженою ціною. Доставка по Україні, обмін ${RETURN_DAYS} ${plural(RETURN_DAYS, 'день', 'дні', 'днів')}.`,
 			canonical: `${pathname}${suffix}`,
 			index: !filtered
 		};
@@ -63,16 +77,19 @@ function buildSeo(input: SeoInput) {
 
 	if (category) {
 		return {
-			title: `${category.name} — купити жіночий одяг в Україні${pageSuffix} | ${SITE.name}`,
-			description: `${category.name} від ${SITE.name}: ${total} моделей у наявності. Доставка Новою Поштою по всій Україні, обмін і повернення ${RETURN_DAYS} ${plural(RETURN_DAYS, 'день', 'дні', 'днів')}.`,
+			title: `${categoryHeading(category.name)} — купити в Україні${pageSuffix} | ${SITE.name}`,
+			description: categoryDescription(category.name, total, range),
 			canonical: `${pathname}${suffix}`,
-			index: !filtered
+			// Порожня категорія в індексі — це «м’яка 404»: Google бачить сторінку без
+			// змісту й знижує довіру до сайту цілком. Адреса лишається живою (на неї
+			// можуть вести старі посилання), і повернеться в індекс, щойно товар зʼявиться.
+			index: !filtered && total > 0
 		};
 	}
 
 	return {
 		title: `Усі товари${pageSuffix} — ${SITE.name}`,
-		description: `Каталог жіночого одягу ${SITE.name}: ${total} моделей у наявності. Доставка по Україні.`,
+		description: `Каталог жіночого одягу ${SITE.name}: ${total} ${plural(total, 'модель', 'моделі', 'моделей')} у наявності. Доставка по Україні.`,
 		canonical: `${pathname}${suffix}`,
 		index: !filtered
 	};
@@ -110,7 +127,9 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 			categories,
 			seo: {
 				title: `Каталог жіночого одягу — ${SITE.name}`,
-				description: `Категорії жіночого одягу LILY LOOK: сукні, костюми, верхній одяг, блузи, спідниці й трикотаж. Доставка Новою Поштою по Україні, обмін ${RETURN_DAYS} ${plural(RETURN_DAYS, 'день', 'дні', 'днів')}.`,
+				// Список — з того, що реально є в каталозі. Опис з «блузами й трикотажем»,
+				// яких у магазині немає, ІІ-асистент переказав би покупцеві як факт.
+				description: `Категорії жіночого одягу ${SITE.name}: ${categories.map((item) => item.name.toLowerCase()).join(', ')}. Доставка Новою Поштою по Україні, обмін ${RETURN_DAYS} ${plural(RETURN_DAYS, 'день', 'дні', 'днів')}.`,
 				canonical: '/catalog',
 				index: true
 			}
@@ -122,9 +141,10 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 	// `contains` по назві не вміє — і віддає результати за доречністю.
 	const ids = query ? await searchProductIds(query) : undefined;
 
-	const [result, facets] = await Promise.all([
+	const [result, facets, range] = await Promise.all([
 		listProducts({ categorySlug, sizes, colors, query, sale, sort, page, ids }),
-		listFacets(categorySlug)
+		listFacets(categorySlug),
+		categorySlug ? categoryPriceRange(categorySlug) : null
 	]);
 
 	locals.jsonLd = [
@@ -149,8 +169,11 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 			total: result.total,
 			pathname: url.pathname,
 			sizes,
-			colors
+			colors,
+			range
 		}),
+		// Вступ під заголовком — лише в категорії й лише тоді, коли в ній є що купити.
+		intro: category && result.total > 0 ? categoryIntro(category.name, result.total, range) : null,
 		...result
 	};
 };

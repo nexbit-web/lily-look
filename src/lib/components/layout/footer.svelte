@@ -2,6 +2,7 @@
 	import { FREE_DELIVERY_FROM, RETURN_DAYS, SENDER, SITE } from '$lib/config';
 	import { plural } from '$lib/plural';
 	import { formatPrice } from '$lib/money';
+	import { telHref } from '$lib/store-facts';
 	import type { CategoryLink } from '$lib/types';
 
 	let { categories }: { categories: CategoryLink[] } = $props();
@@ -37,9 +38,19 @@
 
 		<div class="space-y-3">
 			<p class="text-sm font-medium">Покупцям</p>
+			<!-- Посилання, а не голий текст: так умови відкриваються з будь-якої сторінки,
+			     а пошуковик і ІІ-асистенти знаходять їх з кожного товару. -->
 			<ul class="space-y-2 text-sm text-muted-foreground">
-				<li>Доставка Новою Поштою по Україні</li>
-				<li>Обмін і повернення — {RETURN_DAYS} {plural(RETURN_DAYS, 'день', 'дні', 'днів')}</li>
+				<li>
+					<a href="/delivery" class="transition-colors hover:text-foreground">Доставка і оплата</a>
+				</li>
+				<li>
+					<a href="/returns" class="transition-colors hover:text-foreground">
+						Обмін і повернення — {RETURN_DAYS}
+						{plural(RETURN_DAYS, 'день', 'дні', 'днів')}
+					</a>
+				</li>
+				<li><a href="/contacts" class="transition-colors hover:text-foreground">Контакти</a></li>
 				<li>Оплата при отриманні</li>
 				<li>Самовивіз у {SENDER.city}, {SENDER.region}</li>
 			</ul>
@@ -49,9 +60,7 @@
 			<p class="text-sm font-medium">Контакти</p>
 			<ul class="space-y-2 text-sm text-muted-foreground">
 				<li>
-					<a href="tel:{SITE.phone.replace(/\D/g, '')}" class="hover:text-foreground"
-						>{SITE.phone}</a
-					>
+					<a href={telHref(SITE.phone)} class="hover:text-foreground">{SITE.phone}</a>
 				</li>
 				<li><a href="mailto:{SITE.email}" class="hover:text-foreground">{SITE.email}</a></li>
 				<li>

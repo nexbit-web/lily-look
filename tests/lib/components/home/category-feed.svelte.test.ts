@@ -53,9 +53,17 @@ class TestObserver {
 	}
 }
 
-/** Догортали до мітки кінця списку. */
+/**
+ * Догортали до мітки кінця списку.
+ *
+ * Запис — як у справжньому браузері: у кожного є координати. Поява блоків
+ * (`reveal`) дивиться саме на них, щоб не гасити те, що вже на екрані.
+ */
 function scrollToEnd() {
-	const entry = { isIntersecting: true } as IntersectionObserverEntry;
+	const entry = {
+		isIntersecting: true,
+		boundingClientRect: { top: 0 } as DOMRectReadOnly
+	} as IntersectionObserverEntry;
 	for (const observer of [...observers]) {
 		if (observer.live) observer.callback([entry], null as unknown as IntersectionObserver);
 	}

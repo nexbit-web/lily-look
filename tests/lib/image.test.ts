@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { IMAGE_WIDTHS, imageSrc, imageSrcSet } from '$lib/image';
+import { IMAGE_WIDTHS, imageSrc, imageSrcSet, portableImageSrc } from '$lib/image';
 
 /**
  * Фото в каталозі — чужі: їх заливає CRM, і оригінали бувають величезні.
@@ -56,5 +56,26 @@ describe('розмір фото', () => {
 	it('порожнє посилання не ламає нічого', () => {
 		expect(imageSrc('', 400)).toBe('');
 		expect(imageSrcSet('', [400])).toBeUndefined();
+	});
+});
+
+describe('фото для чужих систем', () => {
+	/**
+	 * Merchant Center не приймає AVIF, а частина фото в каталозі залита саме
+	 * так. `f_auto` віддав би AVIF роботу, який його анонсує, — тож для
+	 * фіду й прев'ю формат задаємо явно.
+	 */
+	it('Cloudinary віддає JPEG великої ширини, незалежно від оригіналу', () => {
+		expect(
+			portableImageSrc('https://res.cloudinary.com/demo/image/upload/v1/lily/palto.avif')
+		).toBe(
+			'https://res.cloudinary.com/demo/image/upload/f_jpg,q_auto,c_limit,w_1600/v1/lily/palto.avif'
+		);
+	});
+
+	it('чужий хост лишається як є', () => {
+		expect(portableImageSrc('https://example.test/palto.jpg')).toBe(
+			'https://example.test/palto.jpg'
+		);
 	});
 });

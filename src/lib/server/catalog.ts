@@ -1,5 +1,5 @@
 import { PRODUCTS_PER_PAGE, SIZE_ORDER, type SortOption } from '$lib/config';
-import { framesForColor } from '$lib/product-images';
+import { framesForColor, imageAlt } from '$lib/product-images';
 import type { SearchDoc } from '$lib/search';
 import type {
 	CatalogFacets,
@@ -10,6 +10,7 @@ import type {
 } from '$lib/types';
 import type { Prisma } from '../../../prisma/generated/client.js';
 import { db } from './db.js';
+import type { PriceRange } from './seo.js';
 
 /**
  * Читання каталогу. Тут — єдине місце, де сторінки торкаються таблиць
@@ -98,8 +99,10 @@ function toCard(row: CardRow): ProductCard {
 		price: row.finalPrice,
 		// Стару ціну показуємо тільки тоді, коли знижка справді діє.
 		compareAt: row.finalPrice < row.price ? row.price : null,
-		image: image ? { url: image.url, alt: image.alt ?? row.name } : null,
-		hoverImage: hoverImage ? { url: hoverImage.url, alt: hoverImage.alt ?? row.name } : null,
+		image: image ? { url: image.url, alt: imageAlt(image.alt, row.name, image.color) } : null,
+		hoverImage: hoverImage
+			? { url: hoverImage.url, alt: imageAlt(hoverImage.alt, row.name, hoverImage.color) }
+			: null,
 		colors: [...new Set(row.variants.map((variant) => variant.color))],
 		inStock: row.variants.length > 0
 	};
@@ -145,6 +148,14 @@ function buildWhere(filters: CatalogFilters): Prisma.ProductWhereInput {
 	};
 }
 
+/**
+ * Категорії для меню в шапці й підвалі.
+ *
+ * Порожні не показуємо — з тієї ж причини, що й на вітрині: посилання з
+ * кожної сторінки сайту в категорію, де нічого немає, розчаровує покупця, а
+ * пошуковик бачить десятки внутрішніх посилань на сторінку без змісту. Щойно
+ * в CRM зʼявиться товар — категорія повернеться в меню сама.
+ */
 export async function listCategories(): Promise<CategoryLink[]> {
 	const rows = await db.category.findMany({
 		orderBy: [{ position: 'asc' }, { name: 'asc' }],
@@ -155,11 +166,13 @@ export async function listCategories(): Promise<CategoryLink[]> {
 		}
 	});
 
-	return rows.map((row) => ({
-		slug: row.slug,
-		name: row.name,
-		productCount: row._count.products
-	}));
+	return rows
+		.filter((row) => row._count.products > 0)
+		.map((row) => ({
+			slug: row.slug,
+			name: row.name,
+			productCount: row._count.products
+		}));
 }
 
 /**
@@ -187,6 +200,24 @@ export async function listCategoryCards(): Promise<CategoryCard[]> {
 			productCount: row._count.products,
 			imageUrl: row.imageUrl
 		}));
+}
+
+/**
+ * Від і до скільки коштують речі категорії — для вступу й опису у видачі.
+ *
+ * Ціна до сплати (`finalPrice`) і лише по тому, що можна купити: «від 999
+ * грн», за якими ховається розпродана модель, — це обман у першому ж рядку.
+ * Один агрегат у базі, а не вибірка товарів.
+ */
+export async function categoryPriceRange(slug: string): Promise<PriceRange | null> {
+	const { _min, _max } = await db.product.aggregate({
+		where: { ...VISIBLE_PRODUCT, category: { slug } },
+		_min: { finalPrice: true },
+		_max: { finalPrice: true }
+	});
+
+	if (_min.finalPrice === null || _max.finalPrice === null) return null;
+	return { min: _min.finalPrice, max: _max.finalPrice };
 }
 
 export async function getCategory(slug: string) {
@@ -379,7 +410,13 @@ export async function listSitemapEntries() {
 	const [products, categories] = await Promise.all([
 		db.product.findMany({
 			where: VISIBLE_PRODUCT,
-			select: { slug: true, updatedAt: true },
+			select: {
+				slug: true,
+				updatedAt: true,
+				// Фото йдуть у карту сайту для Google Картинок. Десять на товар — стеля
+				// з запасом: у каталозі їх зазвичай п’ять-шість.
+				images: { select: { url: true }, orderBy: { position: 'asc' }, take: 10 }
+			},
 			orderBy: { updatedAt: 'desc' }
 		}),
 		db.category.findMany({
@@ -390,6 +427,64 @@ export async function listSitemapEntries() {
 	]);
 
 	return { products, categories };
+}
+
+/** Товар у фіді для Google Merchant і в llms.txt: усе, що треба, одним рядком. */
+export type FeedProduct = {
+	slug: string;
+	name: string;
+	description: string;
+	category: { slug: string; name: string };
+	/** Ціна до сплати і стара ціна, якщо діє знижка. Копійки. */
+	price: number;
+	compareAt: number | null;
+	images: { url: string; color: string | null }[];
+	variants: { sku: string; size: string; color: string; price: number }[];
+};
+
+/**
+ * Увесь живий каталог одним запитом — для фідів.
+ *
+ * Фід Google Merchant і llms.txt потребують тих самих даних, що й сторінка
+ * товару, але по всіх товарах одразу. Сторінку товару тут не викликаємо в
+ * циклі: це був би запит на кожну модель. Варіанти — лише ті, що можна
+ * купити, в порядку з CRM.
+ */
+export async function listFeedProducts(): Promise<FeedProduct[]> {
+	const rows = await db.product.findMany({
+		where: VISIBLE_PRODUCT,
+		select: {
+			slug: true,
+			name: true,
+			description: true,
+			price: true,
+			finalPrice: true,
+			category: { select: { slug: true, name: true } },
+			images: { select: { url: true, color: true }, orderBy: { position: 'asc' } },
+			variants: {
+				where: AVAILABLE_VARIANT,
+				select: { sku: true, size: true, color: true, finalPrice: true },
+				orderBy: VARIANT_ORDER
+			}
+		},
+		orderBy: [{ category: { position: 'asc' } }, { createdAt: 'desc' }]
+	});
+
+	return rows.map((row) => ({
+		slug: row.slug,
+		name: row.name,
+		description: row.description,
+		category: row.category,
+		price: row.finalPrice,
+		compareAt: row.finalPrice < row.price ? row.price : null,
+		images: row.images,
+		variants: row.variants.map((variant) => ({
+			sku: variant.sku,
+			size: variant.size,
+			color: variant.color,
+			price: variant.finalPrice ?? row.finalPrice
+		}))
+	}));
 }
 
 export async function getProduct(slug: string): Promise<ProductDetail | null> {
@@ -443,7 +538,7 @@ export async function getProduct(slug: string): Promise<ProductDetail | null> {
 		category: row.category,
 		images: row.images.map((image) => ({
 			url: image.url,
-			alt: image.alt ?? row.name,
+			alt: imageAlt(image.alt, row.name, image.color),
 			color: image.color
 		})),
 		// Порожнє поле в CRM — це «не заповнили», а не характеристика без

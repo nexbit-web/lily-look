@@ -85,6 +85,25 @@ export const IMAGE_SMALL = SMALL;
 export const IMAGE_LARGE = LARGE;
 
 /**
+ * Фото для чужих систем: фід Google Merchant і прев'ю посилань у
+ * месенджерах.
+ *
+ * `f_auto` тут не годиться. Формат він обирає за заголовком Accept того,
+ * хто просить, а частина фото в каталозі й так залита в AVIF. Роботу, який
+ * пообіцяв розуміти AVIF, дістанеться AVIF — а Merchant Center його не
+ * приймає, і позиція вилітає з Google Покупок через «непідтримуване фото».
+ * JPEG розуміють усі; вага тут не важлива — ці кадри не вантажить покупець.
+ */
+export function portableImageSrc(url: string): string {
+	const upload = url.indexOf(CLOUDINARY_UPLOAD);
+	if (url.includes('res.cloudinary.com') && upload !== -1) {
+		const cut = upload + CLOUDINARY_UPLOAD.length;
+		return `${url.slice(0, cut)}f_jpg,q_auto,c_limit,w_${LARGE}/${url.slice(cut)}`;
+	}
+	return imageSrc(url, LARGE);
+}
+
+/**
  * CDN не віддав зменшений кадр — показуємо оригінал.
  *
  * Важить більше, але сіра пляма замість речі коштувала б дорожче.

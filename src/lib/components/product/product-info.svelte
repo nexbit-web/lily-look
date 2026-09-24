@@ -34,7 +34,7 @@
 			<Accordion.Content class="text-muted-foreground">
 				<p class="max-w-prose whitespace-pre-line">{description}</p>
 				{#if sku}
-					<p class="mt-5 text-xs tracking-[0.08em] text-muted-foreground/70 uppercase">
+					<p class="mt-5 text-xs tracking-[0.08em] text-muted-foreground uppercase">
 						Артикул: {sku}
 					</p>
 				{/if}
@@ -52,7 +52,7 @@
 							<div
 								class="grid grid-cols-[12rem_1fr] gap-x-4 py-3 max-sm:grid-cols-1 max-sm:gap-y-0.5"
 							>
-								<dt class="text-muted-foreground/80">{attribute.name}</dt>
+								<dt class="text-muted-foreground">{attribute.name}</dt>
 								<dd class="text-foreground">{attribute.value}</dd>
 							</div>
 						{/each}
