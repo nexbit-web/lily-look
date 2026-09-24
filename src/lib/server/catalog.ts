@@ -5,6 +5,7 @@ import type {
 	CatalogFacets,
 	CategoryCard,
 	CategoryLink,
+	CollectionShelf,
 	ProductCard,
 	ProductDetail
 } from '$lib/types';
@@ -320,6 +321,32 @@ export async function listCategoryProducts(slug: string, limit: number): Promise
 		take: limit
 	});
 	return rows.map(toCard);
+}
+
+/**
+ * Полиці колекції — усе, що зараз можна купити в її категоріях.
+ *
+ * Один запит на всі категорії, а порядок полиць — той, що в колекції, а не
+ * в базі: осінню починають демісезонні куртки, хоч у CRM вони й не перші.
+ * Категорії без товару (або вже без такої адреси) полиці не отримують —
+ * порожній заголовок посеред сторінки виглядав би як збій.
+ */
+export async function listCollection(categorySlugs: readonly string[]): Promise<CollectionShelf[]> {
+	const rows = await db.category.findMany({
+		where: { slug: { in: [...categorySlugs] } },
+		select: {
+			slug: true,
+			name: true,
+			products: { where: VISIBLE_PRODUCT, select: CARD_SELECT, orderBy: { createdAt: 'desc' } }
+		}
+	});
+
+	const bySlug = new Map(rows.map((row) => [row.slug, row]));
+	return categorySlugs.flatMap((slug) => {
+		const row = bySlug.get(slug);
+		if (!row || row.products.length === 0) return [];
+		return [{ slug: row.slug, name: row.name, products: row.products.map(toCard) }];
+	});
 }
 
 /** Картка товару плюс текст, по якому його шукають. */

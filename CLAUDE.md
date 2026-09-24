@@ -45,22 +45,24 @@ npm run db:studio      # GUI к базе
 
 ## Где что лежит
 
-| Задача                        | Файл                         |
-| ----------------------------- | ---------------------------- |
-| Запросы каталога              | `src/lib/server/catalog.ts`  |
-| Корзина                       | `src/lib/server/cart.ts`     |
-| Оформление заказа             | `src/lib/server/orders.ts`   |
-| Подключение провайдера оплаты | `src/lib/server/payments.ts` |
-| Телеграм-бот менеджеров       | `src/lib/server/bot/`        |
-| Правила статусов заказа       | `src/lib/bot/workflow.ts`    |
-| Доставка, размеры, сортировки | `src/lib/config.ts`          |
-| Валидация форм                | `src/lib/schemas.ts`         |
-| Разметка Schema.org, SEO      | `src/lib/server/seo.ts`      |
-| Фид Merchant, llms.txt        | `src/lib/server/feeds.ts`    |
-| Условия магазина словами      | `src/lib/store-facts.ts`     |
-| Схема БД                      | `prisma/schema.prisma`       |
-| Тесты                         | `tests/` (зеркало `src/`)    |
-| Демо-данные                   | `prisma/seed.ts`             |
+| Задача                        | Файл                                                             |
+| ----------------------------- | ---------------------------------------------------------------- |
+| Запросы каталога              | `src/lib/server/catalog.ts`                                      |
+| Корзина                       | `src/lib/server/cart.ts`                                         |
+| Оформление заказа             | `src/lib/server/orders.ts`                                       |
+| Подключение провайдера оплаты | `src/lib/server/payments.ts`                                     |
+| Телеграм-бот менеджеров       | `src/lib/server/bot/`                                            |
+| Правила статусов заказа       | `src/lib/bot/workflow.ts`                                        |
+| Доставка, размеры, сортировки | `src/lib/config.ts`                                              |
+| Валидация форм                | `src/lib/schemas.ts`                                             |
+| Разметка Schema.org, SEO      | `src/lib/server/seo.ts`                                          |
+| Фид Merchant, llms.txt        | `src/lib/server/feeds.ts`                                        |
+| Условия магазина словами      | `src/lib/store-facts.ts`                                         |
+| Баннеры главной               | `static/banners` + `buildBanners` в `src/routes/+page.server.ts` |
+| Сезонные коллекции            | `COLLECTIONS` в `src/lib/config.ts`                              |
+| Схема БД                      | `prisma/schema.prisma`                                           |
+| Тесты                         | `tests/` (зеркало `src/`)                                        |
+| Демо-данные                   | `prisma/seed.ts`                                                 |
 
 ## Особенности реализации
 

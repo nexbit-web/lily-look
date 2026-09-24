@@ -63,7 +63,7 @@
 		'днів'
 	)}."
 	canonical="/"
-	image={data.banners[0]?.image ?? null}
+	image={data.shareImage}
 />
 
 <div class="mx-auto max-w-6xl px-4 pt-2">

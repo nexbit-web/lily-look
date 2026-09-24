@@ -49,6 +49,13 @@ export type HomeSection = {
 	products: ProductCard[] | null;
 };
 
+/** Полиця колекції: одна категорія з усім, що в ній зараз можна купити. */
+export type CollectionShelf = {
+	slug: string;
+	name: string;
+	products: ProductCard[];
+};
+
 export type ProductVariantView = {
 	id: string;
 	/** Артикул: іде в розмітку Schema.org як sku/mpn. */

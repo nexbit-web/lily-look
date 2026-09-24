@@ -1,12 +1,17 @@
 import { RETURN_DAYS } from '$lib/config';
-import type { ProductDetail } from '$lib/types';
+import { formatPrice } from '$lib/money';
+import type { ProductCard, ProductDetail } from '$lib/types';
 import { describe, expect, it } from 'vitest';
 import {
 	breadcrumbsNode,
 	categoryDescription,
 	categoryHeading,
 	categoryIntro,
+	collectionDescription,
+	collectionIntro,
+	collectionTitle,
 	itemListNode,
+	priceRangeOf,
 	productNode,
 	serializeJsonLd,
 	storeNode,
@@ -341,6 +346,49 @@ describe('тексти категорії', () => {
 
 		expect(text.length).toBeLessThanOrEqual(160);
 		expect(text).toContain('10 моделей');
+	});
+});
+
+describe('тексти колекції', () => {
+	const shelves = ['Демісезонні куртки', 'Пальто', 'Бомбери', 'Вітровки'];
+	const range = { min: 138_000, max: 450_000 };
+
+	it('вступ називає склад — у запиті «осінній верхній одяг» слова «колекція» немає', () => {
+		const text = collectionIntro('Осіння колекція', 24, range, shelves);
+
+		expect(text).toContain('24 моделі у наявності');
+		expect(text).toContain(`від ${formatPrice(138_000)} до ${formatPrice(450_000)}`);
+		expect(text).toContain('демісезонні куртки, пальто, бомбери, вітровки');
+		expect(text).toContain(`${RETURN_DAYS} днів`);
+	});
+
+	it('заголовок у видачі — лише три перші полиці', () => {
+		expect(collectionTitle('Осіння колекція', shelves)).toBe(
+			'Осіння колекція жіночого одягу — демісезонні куртки, пальто, бомбери | LILY LOOK'
+		);
+	});
+
+	it('опис вміщується в те, що Google показує без обрізання', () => {
+		const text = collectionDescription('Осіння колекція', 24, range, shelves);
+
+		expect(text.length).toBeLessThanOrEqual(160);
+	});
+
+	it('діапазон цін — з карток, які стоять на сторінці', () => {
+		const card = (price: number): ProductCard => ({
+			id: String(price),
+			slug: 'kurtka',
+			name: 'Куртка',
+			price,
+			compareAt: null,
+			image: null,
+			hoverImage: null,
+			colors: [],
+			inStock: true
+		});
+
+		expect(priceRangeOf([card(250_000), card(138_000)])).toEqual({ min: 138_000, max: 250_000 });
+		expect(priceRangeOf([])).toBeNull();
 	});
 });
 

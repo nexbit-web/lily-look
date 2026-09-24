@@ -1,3 +1,4 @@
+import { COLLECTIONS } from '$lib/config';
 import { IMAGE_LARGE, imageSrc } from '$lib/image';
 import { listSitemapEntries } from '$lib/server/catalog';
 import type { RequestHandler } from './$types';
@@ -50,6 +51,7 @@ export const GET: RequestHandler = async ({ url: requestUrl, setHeaders }) => {
 		...categories.map((category) =>
 			url(`${origin}/catalog/${category.slug}`, category.updatedAt, '0.8')
 		),
+		...COLLECTIONS.map((collection) => url(`${origin}/collection/${collection.slug}`, null, '0.8')),
 		...products.map((product) =>
 			url(
 				`${origin}/product/${product.slug}`,

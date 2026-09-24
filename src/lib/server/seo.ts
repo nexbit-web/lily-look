@@ -319,9 +319,9 @@ export function serializeJsonLd(nodes: JsonLdNode[]): string {
 		.replace(/</g, '\\u003c')
 		.replace(/>/g, '\\u003e')
 		.replace(/&/g, '\\u0026')
-		// \u041f\u043e\u0434\u0432\u0456\u0439\u043d\u0438\u0439 \u0441\u043b\u0435\u0448 \u2014 \u043d\u0435 \u043e\u043f\u0438\u0441\u043a\u0430: \u043f\u043e\u0442\u0440\u0456\u0431\u0435\u043d \u0442\u0435\u043a\u0441\u0442 `\u2028`, \u0430 \u043d\u0435 \u0441\u0430\u043c \u0441\u0438\u043c\u0432\u043e\u043b.
-		// \u041e\u0434\u0438\u043d\u0430\u0440\u043d\u0438\u0439 \u0434\u0430\u0432 \u0431\u0438 \u0432 \u0440\u044f\u0434\u043a\u0443 \u0437\u0430\u043c\u0456\u043d\u0438 \u0442\u043e\u0439 \u0441\u0430\u043c\u0438\u0439 \u043d\u0435\u0432\u0438\u0434\u0438\u043c\u0438\u0439 \u0440\u043e\u0437\u0440\u0438\u0432 \u0440\u044f\u0434\u043a\u0430,
-		// \u0456 \u0437\u0430\u043c\u0456\u043d\u0430 \u043d\u0435 \u0440\u043e\u0431\u0438\u043b\u0430 \u0431 \u043d\u0456\u0447\u043e\u0433\u043e.
+		// Подвійний слеш — не описка: потрібен текст `\u2028`, а не сам символ.
+		// Одинарний дав би в рядку заміни той самий невидимий розрив рядка,
+		// і заміна не робила б нічого.
 		.replace(/\u2028/g, '\\u2028')
 		.replace(/\u2029/g, '\\u2029');
 
@@ -366,14 +366,19 @@ function modelsInStock(total: number): string {
  * Вигадувати тут нічого не можна: текст оновлюється разом із каталогом.
  */
 export function categoryIntro(name: string, total: number, range: PriceRange | null): string {
-	const branch = deliveryMethod('NOVA_POSHTA_BRANCH');
-	const [from, to] = branch.days;
-
 	return [
 		`${categoryHeading(name)} від ${SITE.name}: ${modelsInStock(total)}${priceSpan(range)}.`,
+		...serviceFacts()
+	].join(' ');
+}
+
+/** Доставка й обмін — однаково для категорії й колекції. */
+function serviceFacts(): string[] {
+	const [from, to] = deliveryMethod('NOVA_POSHTA_BRANCH').days;
+	return [
 		`Доставка Новою Поштою по всій Україні за ${from}–${to} ${plural(to, 'день', 'дні', 'днів')}, безкоштовно від ${formatPrice(FREE_DELIVERY_FROM)}.`,
 		`Обмін і повернення — ${RETURN_DAYS} ${plural(RETURN_DAYS, 'день', 'дні', 'днів')}.`
-	].join(' ');
+	];
 }
 
 /**
@@ -382,4 +387,53 @@ export function categoryIntro(name: string, total: number, range: PriceRange | n
  */
 export function categoryDescription(name: string, total: number, range: PriceRange | null): string {
 	return `${categoryHeading(name)} — ${modelsInStock(total)}${priceSpan(range)}. Доставка по Україні, обмін ${RETURN_DAYS} ${plural(RETURN_DAYS, 'день', 'дні', 'днів')}.`;
+}
+
+// ─── Тексти сторінки колекції ────────────────────────────────────────────
+
+/**
+ * Від і до скільки коштує все на сторінці. Рахується з уже вибраних карток:
+ * окремий агрегат у базі повторив би той самий запит.
+ */
+export function priceRangeOf(products: ProductCard[]): PriceRange | null {
+	if (products.length === 0) return null;
+	const prices = products.map((product) => product.price);
+	return { min: Math.min(...prices), max: Math.max(...prices) };
+}
+
+/** «демісезонні куртки, пальто, бомбери» — з чого складається колекція. */
+function shelfList(shelves: string[]): string {
+	return shelves.map((name) => name.toLowerCase()).join(', ');
+}
+
+/**
+ * Вступ колекції — ті самі факти, що й у категорії, плюс її склад. Саме
+ * склад пошуковик і асистент зіставляють із запитом на кшталт «осінній
+ * жіночий верхній одяг»: слова «колекція» в такому запиті немає.
+ */
+export function collectionIntro(
+	name: string,
+	total: number,
+	range: PriceRange | null,
+	shelves: string[]
+): string {
+	return [
+		`${name} ${SITE.name}: ${modelsInStock(total)}${priceSpan(range)} — ${shelfList(shelves)}.`,
+		...serviceFacts()
+	].join(' ');
+}
+
+/** Заголовок у видачі: три перші полиці — найважливіше, що в колекції є. */
+export function collectionTitle(name: string, shelves: string[]): string {
+	const lead = shelves.length > 0 ? ` — ${shelfList(shelves.slice(0, 3))}` : '';
+	return `${name} жіночого одягу${lead} | ${SITE.name}`;
+}
+
+export function collectionDescription(
+	name: string,
+	total: number,
+	range: PriceRange | null,
+	shelves: string[]
+): string {
+	return `${name} жіночого одягу — ${modelsInStock(total)}${priceSpan(range)}: ${shelfList(shelves.slice(0, 3))}. Доставка по Україні, обмін ${RETURN_DAYS} ${plural(RETURN_DAYS, 'день', 'дні', 'днів')}.`;
 }

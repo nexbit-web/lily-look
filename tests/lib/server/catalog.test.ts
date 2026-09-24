@@ -18,6 +18,7 @@ const {
 	listCategories,
 	listCategoryCards,
 	listCategoryProducts,
+	listCollection,
 	listProducts,
 	listSale
 } = await import('$lib/server/catalog');
@@ -358,6 +359,39 @@ describe('стрічка категорії на головній', () => {
 		expect(args.where.variants).toEqual({ some: { isActive: true, stock: { gt: 0 } } });
 		expect(args.take).toBe(8);
 		expect(cards[0].slug).toBe('suknia-olivia');
+	});
+});
+
+describe('колекція', () => {
+	it('полиці йдуть у порядку колекції, а не бази', async () => {
+		db.category.findMany.mockResolvedValue([
+			{ slug: 'palto', name: 'Пальто', products: [row({ id: 'p2', slug: 'palto-nord' })] },
+			{ slug: 'demisezonni-kurtky', name: 'Демісезонні куртки', products: [row()] }
+		]);
+
+		const shelves = await listCollection(['demisezonni-kurtky', 'palto']);
+
+		expect(shelves.map((shelf) => shelf.name)).toEqual(['Демісезонні куртки', 'Пальто']);
+		expect(shelves[1].products[0].slug).toBe('palto-nord');
+	});
+
+	it('на полицю йде тільки те, що можна купити', async () => {
+		db.category.findMany.mockResolvedValue([]);
+
+		await listCollection(['palto']);
+
+		const args = db.category.findMany.mock.calls[0][0];
+		expect(args.where).toEqual({ slug: { in: ['palto'] } });
+		expect(args.select.products.where).toEqual({
+			isActive: true,
+			variants: { some: { isActive: true, stock: { gt: 0 } } }
+		});
+	});
+
+	it('розібрана категорія й категорія зі зміненою адресою полиці не отримують', async () => {
+		db.category.findMany.mockResolvedValue([{ slug: 'palto', name: 'Пальто', products: [] }]);
+
+		expect(await listCollection(['palto', 'vitrovky'])).toEqual([]);
 	});
 });
 
