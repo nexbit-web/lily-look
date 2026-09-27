@@ -136,8 +136,7 @@
 				<Combobox
 					id="settlement"
 					name="deliveryCity"
-					placeholder="Оберіть населений пункт"
-					searchPlaceholder="Почніть вводити назву…"
+					placeholder="Почніть вводити, напр. Київ"
 					search={searchSettlements}
 					invalid={Boolean(errors.deliveryCity)}
 					emptyText="Такого населеного пункту немає в довіднику"
@@ -156,8 +155,7 @@
 					<Combobox
 						id="warehouse"
 						name="deliveryAddress"
-						placeholder={settlement ? 'Оберіть відділення' : 'Спочатку оберіть місто'}
-						searchPlaceholder="Номер або вулиця…"
+						placeholder="Номер відділення або вулиця"
 						search={searchWarehouses}
 						disabled={!settlement}
 						invalid={Boolean(errors.deliveryAddress)}

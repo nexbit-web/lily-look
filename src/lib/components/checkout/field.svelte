@@ -32,7 +32,7 @@
 	<div class="field-box">
 		{@render children()}
 		<label for={id} class="field-label">
-			{label}{#if !required}<span class="font-normal"> (не обов’язково)</span>{/if}
+			{label}{#if !required}<span class="ms-[0.25em] font-normal">(не обов’язково)</span>{/if}
 		</label>
 	</div>
 

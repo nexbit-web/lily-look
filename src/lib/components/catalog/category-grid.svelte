@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { IMAGE_CARD, imageSrc } from '$lib/image';
+	import { IMAGE_TILE, imageSrc } from '$lib/image';
 	import { reveal } from '$lib/actions/reveal';
 	import type { CategoryCard } from '$lib/types';
 	import ArrowRightIcon from '@lucide/svelte/icons/arrow-right';
@@ -24,7 +24,7 @@
 					{#if category.imageUrl}
 						<!-- alt порожній свідомо: назва категорії поруч, у підписі. -->
 						<img
-							src={imageSrc(category.imageUrl, IMAGE_CARD)}
+							src={imageSrc(category.imageUrl, IMAGE_TILE)}
 							alt=""
 							loading={index < 3 ? 'eager' : 'lazy'}
 							class="size-full object-cover transition-transform duration-700 ease-out group-hover:scale-105 motion-reduce:transition-none"

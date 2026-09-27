@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
 	IMAGE_CARD,
+	IMAGE_TILE,
 	IMAGE_LARGE,
 	IMAGE_SMALL,
 	IMAGE_WIDTHS,
@@ -46,22 +47,27 @@ describe('розмір фото', () => {
 		expect(imageSrcSet(url, [400, 800])).toBeUndefined();
 	});
 
-	it('на весь сайт лише три ширини — інакше CDN ріже кадри під кожну', () => {
+	it('на весь сайт лише чотири ширини — інакше CDN ріже кадри під кожну', () => {
 		const all = new Set([
 			...Object.values(IMAGE_WIDTHS).flat(),
 			IMAGE_CARD,
+			IMAGE_TILE,
 			IMAGE_SMALL,
 			IMAGE_LARGE
 		]);
 
 		// Кожна зайва ширина — це окремий файл, який CDN виготовляє при
 		// першому запиті, і сіра пляма на місці фото, поки він це робить.
-		expect([...all].sort((a, b) => a - b)).toEqual([400, 800, 1600]);
+		expect([...all].sort((a, b) => a - b)).toEqual([400, 600, 800, 1600]);
 	});
 
-	it('картка просить один розмір — той самий, що й галерея на телефоні', () => {
-		expect(IMAGE_CARD).toBe(800);
-		expect(IMAGE_WIDTHS.gallery).toContain(IMAGE_CARD);
+	it('картка просить один розмір — не більший, ніж вона займає на екрані', () => {
+		// Дві колонки на телефоні ×3 і чотири на ретина-десктопі — до ~600 точок.
+		expect(IMAGE_CARD).toBe(600);
+	});
+
+	it('плитка категорії на всю ширину телефона — кадр більший за картку', () => {
+		expect(IMAGE_TILE).toBeGreaterThan(IMAGE_CARD);
 	});
 
 	it('srcset перелічує всі ширини', () => {

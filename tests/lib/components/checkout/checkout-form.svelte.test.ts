@@ -177,3 +177,15 @@ describe('поля', () => {
 		).not.toContain('не обов’язково');
 	});
 });
+
+describe('підписи полів', () => {
+	it('«(не обов’язково)» відсунуте від назви, а не злите з нею', () => {
+		open();
+
+		const label = document.querySelector('label[for="customerEmail"]')!;
+		const note = label.querySelector('span')!;
+		expect(note.textContent).toBe('(не обов’язково)');
+		// Пробіл на початку тексту Svelte викидає, тож відступ — стилем.
+		expect(note).toHaveClass('ms-[0.25em]');
+	});
+});

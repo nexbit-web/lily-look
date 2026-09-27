@@ -106,9 +106,9 @@ describe('фото картки', () => {
 		});
 
 		const image = screen.getByAltText('Сукня');
-		// Один розмір на всі екрани: CDN ріже кадр один раз, а не 400 і 800 окремо.
+		// Один розмір на всі екрани: CDN ріже кадр один раз, а не під кожен екран окремо.
 		expect(image.getAttribute('src')).toBe(
-			'https://res.cloudinary.com/demo/image/upload/f_auto,q_auto,c_limit,w_800/v1/lily/abc.png'
+			'https://res.cloudinary.com/demo/image/upload/f_auto,q_auto,c_limit,w_600/v1/lily/abc.png'
 		);
 		expect(image.hasAttribute('srcset')).toBe(false);
 	});

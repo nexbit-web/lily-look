@@ -218,7 +218,7 @@
 
 		<section class="space-y-4">
 			<h2 class="font-heading text-xl">Коментар</h2>
-			<Field id="comment" label="Побажання до замовлення" error={errors.comment ?? ''}>
+			<Field id="comment" label="Ваші побажання" error={errors.comment ?? ''}>
 				<textarea
 					class="field-input"
 					id="comment"
