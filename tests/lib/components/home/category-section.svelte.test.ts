@@ -92,19 +92,17 @@ describe('стрічка категорії', () => {
 		expect(link).toHaveAttribute('href', '/catalog/sukni');
 	});
 
-	it('коли в категорії є ще речі — веде подивитись усі', () => {
+	/** Стрічка показує категорію цілком — кнопки «ще» під нею немає. */
+	it('під стрічкою немає кнопки «Дивитись усю категорію»', () => {
 		render(CategorySection, { section: section({ productCount: 20, products: [card()] }) });
 
-		expect(screen.getByRole('link', { name: 'Дивитись усю категорію' })).toHaveAttribute(
-			'href',
-			'/catalog/sukni'
-		);
+		expect(screen.queryByRole('link', { name: 'Дивитись усю категорію' })).not.toBeInTheDocument();
 	});
 
-	it('нічого не лишилось за посиланням — зайвої кнопки немає', () => {
-		render(CategorySection, { section: section({ productCount: 1, products: [card()] }) });
+	it('заглушка займає місце під усю категорію, а не під перші вісім', () => {
+		render(CategorySection, { section: section({ productCount: 12 }) });
 
-		expect(screen.queryByRole('link', { name: 'Дивитись усю категорію' })).not.toBeInTheDocument();
+		expect(skeleton()?.children).toHaveLength(12);
 	});
 
 	it('кількості товарів у категорії ніде не показує', () => {

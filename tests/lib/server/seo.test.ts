@@ -10,6 +10,9 @@ import {
 	collectionDescription,
 	collectionIntro,
 	collectionTitle,
+	catalogDescription,
+	DESCRIPTION_LIMIT,
+	TITLE_LIMIT,
 	itemListNode,
 	priceRangeOf,
 	productNode,
@@ -362,10 +365,37 @@ describe('тексти колекції', () => {
 		expect(text).toContain(`${RETURN_DAYS} днів`);
 	});
 
-	it('заголовок у видачі — лише три перші полиці', () => {
-		expect(collectionTitle('Осіння колекція', shelves)).toBe(
-			'Осіння колекція жіночого одягу — демісезонні куртки, пальто, бомбери | LILY LOOK'
+	it('заголовок у видачі — перші полиці, стільки, скільки Google покаже без обрізання', () => {
+		const title = collectionTitle('Осіння колекція', shelves);
+
+		expect(title).toBe('Осіння колекція жіночого одягу — демісезонні куртки | LILY LOOK');
+		expect(title.length).toBeLessThanOrEqual(TITLE_LIMIT);
+	});
+
+	it('коротка назва полиць — у заголовок їх вміщується більше', () => {
+		expect(collectionTitle('Осінь', ['Пальто', 'Бомбери', 'Жакети', 'Жилетки'])).toBe(
+			'Осінь жіночого одягу — пальто, бомбери, жакети | LILY LOOK'
 		);
+	});
+
+	it('опис каталогу обрізає перелік категорій цілими словами й каже «та інше»', () => {
+		const names = [
+			'Вітровки',
+			'Демісезонні куртки',
+			'Пальто',
+			'Бомбери',
+			'Жилетки',
+			'Жакети',
+			'Сорочки',
+			'Пуховики',
+			'Зимові куртки'
+		];
+		const text = catalogDescription(names);
+
+		expect(text.length).toBeLessThanOrEqual(DESCRIPTION_LIMIT);
+		expect(text).toContain('вітровки, демісезонні куртки');
+		expect(text).toContain('та інше');
+		expect(catalogDescription(['Сукні'])).not.toContain('та інше');
 	});
 
 	it('опис вміщується в те, що Google показує без обрізання', () => {

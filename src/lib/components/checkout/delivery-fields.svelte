@@ -1,11 +1,8 @@
 <script lang="ts">
 	import Combobox from '$lib/components/checkout/combobox.svelte';
 	import Field from '$lib/components/checkout/field.svelte';
-	import { Input } from '$lib/components/ui/input';
 	import * as RadioGroup from '$lib/components/ui/radio-group';
-	import { Skeleton } from '$lib/components/ui/skeleton';
-	import { DELIVERY_METHODS, SENDER, deliveryCostFor, type DeliveryMethodValue } from '$lib/config';
-	import { formatPrice } from '$lib/money';
+	import { DELIVERY_METHODS, SENDER, isDeliveryFree, type DeliveryMethodValue } from '$lib/config';
 	import type { AutocompleteOption, SettlementOption, WarehouseOption } from '$lib/types';
 	import { cn } from '$lib/utils';
 	import InfoIcon from '@lucide/svelte/icons/info';
@@ -17,11 +14,7 @@
 		novaPoshtaLive,
 		method = $bindable<DeliveryMethodValue>('NOVA_POSHTA_BRANCH'),
 		city = $bindable(''),
-		address = $bindable(''),
-		cityRef = $bindable(''),
-		/** Реальний тариф НП у копійках; null — поки невідомий. */
-		liveCost = $bindable<number | null>(null),
-		costLoading = $bindable(false)
+		address = $bindable('')
 	}: {
 		subtotal: number;
 		errors: Record<string, string>;
@@ -29,9 +22,6 @@
 		method?: DeliveryMethodValue;
 		city?: string;
 		address?: string;
-		cityRef?: string;
-		liveCost?: number | null;
-		costLoading?: boolean;
 	} = $props();
 
 	let settlement = $state<AutocompleteOption | null>(null);
@@ -65,46 +55,6 @@
 			address = '';
 			settlement = null;
 		}
-	});
-
-	// cityRef їде у форму: сервер порахує тим самим тарифом, що показали тут.
-	$effect(() => {
-		cityRef = settlement?.cityRef ?? '';
-	});
-
-	/**
-	 * Реальний тариф НП. Оголошену вартість і кількість місць сервер бере
-	 * з кошика сам, тому сюди передаємо лише напрямок і тип доставки.
-	 */
-	$effect(() => {
-		const ref = settlement?.cityRef;
-		const toDoors = selected.kind === 'courier';
-
-		if (!ref || selected.carrier !== 'nova-poshta') {
-			liveCost = null;
-			costLoading = false;
-			return;
-		}
-
-		let cancelled = false;
-		costLoading = true;
-
-		fetch(`/api/nova-poshta/price?city=${encodeURIComponent(ref)}&doors=${toDoors ? '1' : '0'}`)
-			.then((response) => (response.ok ? response.json() : null))
-			.then((payload) => {
-				if (cancelled) return;
-				liveCost = typeof payload?.cost === 'number' ? payload.cost : null;
-			})
-			.catch(() => {
-				if (!cancelled) liveCost = null;
-			})
-			.finally(() => {
-				if (!cancelled) costLoading = false;
-			});
-
-		return () => {
-			cancelled = true;
-		};
 	});
 
 	async function fetchItems<T>(url: string): Promise<T[]> {
@@ -146,7 +96,7 @@
 	<RadioGroup.Root bind:value={method as string} class="gap-3">
 		{#each DELIVERY_METHODS as item (item.value)}
 			{@const active = method === item.value}
-			{@const cost = deliveryCostFor(item.value, subtotal)}
+			{@const free = isDeliveryFree(item.value, subtotal)}
 			<label
 				for="delivery-{item.value}"
 				class={cn(
@@ -159,16 +109,14 @@
 					<span class="block text-sm font-medium">{item.label}</span>
 					<span class="block text-xs text-muted-foreground">{item.hint}</span>
 				</span>
-				<span class={cn('text-sm tabular-nums', cost === 0 && 'font-medium text-success')}>
-					{#if cost === 0}
-						Безкоштовно
-					{:else if active && costLoading}
-						<Skeleton class="h-4 w-14 rounded-md" />
-					{:else if active && liveCost !== null}
-						{formatPrice(liveCost)}
-					{:else}
-						від {formatPrice(item.cost)}
-					{/if}
+				<!-- Суму тарифу не називаємо: на пошті вона була б іншою (див. isDeliveryFree). -->
+				<span
+					class={cn(
+						'shrink-0 text-right text-xs',
+						free ? 'text-sm font-medium text-success' : 'text-muted-foreground'
+					)}
+				>
+					{free ? 'Безкоштовно' : 'За тарифом перевізника'}
 				</span>
 			</label>
 		{/each}
@@ -176,7 +124,6 @@
 
 	<!-- RadioGroup тримає значення у стані, а form action читає ці поля -->
 	<input type="hidden" name="deliveryMethod" value={method} />
-	<input type="hidden" name="deliveryCityRef" value={cityRef} />
 
 	{#if selected.kind === 'pickup'}
 		<p class="rounded-xl border bg-muted/50 p-4 text-sm text-muted-foreground">
@@ -221,7 +168,8 @@
 				</Field>
 			{:else}
 				<Field id="deliveryAddress" label="Адреса" required error={errors.deliveryAddress ?? ''}>
-					<Input
+					<input
+						class="field-input"
 						id="deliveryAddress"
 						name="deliveryAddress"
 						placeholder="Вулиця, будинок, квартира"
@@ -235,7 +183,8 @@
 	{:else}
 		<div class="grid gap-4 sm:grid-cols-2">
 			<Field id="deliveryCity" label="Місто або село" required error={errors.deliveryCity ?? ''}>
-				<Input
+				<input
+					class="field-input"
 					id="deliveryCity"
 					name="deliveryCity"
 					placeholder="Одеса"
@@ -251,7 +200,8 @@
 				required
 				error={errors.deliveryAddress ?? ''}
 			>
-				<Input
+				<input
+					class="field-input"
 					id="deliveryAddress"
 					name="deliveryAddress"
 					placeholder={selected.kind === 'courier' ? 'Вулиця, будинок' : 'Відділення № 12'}

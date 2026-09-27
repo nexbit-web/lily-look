@@ -4,7 +4,6 @@ import {
 	COLLECTIONS,
 	FREE_DELIVERY_FROM,
 	HOME_BLOCK_SIZE,
-	HOME_CATEGORY_LIMIT,
 	HOME_EAGER_SECTIONS
 } from '$lib/config';
 import { formatPrice } from '$lib/money';
@@ -56,9 +55,7 @@ async function buildHome() {
 	// свої картки сама, коли покупець до неї догортає: головна не важчає від
 	// того, що в CRM завели ще десять категорій.
 	const eager = await Promise.all(
-		categories
-			.slice(0, HOME_EAGER_SECTIONS)
-			.map((category) => listCategoryProducts(category.slug, HOME_CATEGORY_LIMIT))
+		categories.slice(0, HOME_EAGER_SECTIONS).map((category) => listCategoryProducts(category.slug))
 	);
 
 	const sections: HomeSection[] = categories.map((category, index) => ({

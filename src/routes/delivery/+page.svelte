@@ -47,6 +47,7 @@
 		</table>
 
 		<p class="mt-6 rounded-lg bg-muted/60 px-4 py-3 text-sm">{FACTS.freeDelivery}</p>
+		<p class="mt-4 text-sm text-muted-foreground">{FACTS.carrierTariff}</p>
 		<p class="mt-4 text-sm text-muted-foreground">
 			Точну дату отримання видно на сторінці кожного товару — вона рахується від сьогоднішнього дня
 			й години замовлення.

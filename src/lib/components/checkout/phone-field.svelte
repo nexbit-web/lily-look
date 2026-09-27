@@ -1,6 +1,4 @@
 <script lang="ts">
-	import * as InputGroup from '$lib/components/ui/input-group';
-
 	/**
 	 * Телефон у форматі +38 0XX XXX XX XX.
 	 *
@@ -45,24 +43,21 @@
 	}
 </script>
 
-<!-- Підсвітку помилки малює сам InputGroup за aria-invalid на інпуті —
-     тільки нижньою рискою, як і решта полів пресета. -->
-<InputGroup.Root>
-	<InputGroup.Addon>
-		<span class="font-medium text-foreground">+38</span>
-	</InputGroup.Addon>
-	<InputGroup.Input
-		{id}
-		type="tel"
-		inputmode="numeric"
-		autocomplete="tel-national"
-		placeholder="067 123 45 67"
-		value={display}
-		aria-invalid={invalid}
-		oninput={onInput}
-		{onblur}
-	/>
-</InputGroup.Root>
+<!-- «+38» — не частина значення: його не стерти й не задублювати. Показується
+     разом із піднятим підписом (див. `.field-prefix` в app.css). -->
+<span class="field-prefix" aria-hidden="true">+38</span>
+<input
+	class="field-input has-prefix"
+	{id}
+	type="tel"
+	inputmode="numeric"
+	autocomplete="tel-national"
+	placeholder="067 123 45 67"
+	value={display}
+	aria-invalid={invalid}
+	oninput={onInput}
+	{onblur}
+/>
 
 <!-- У form action їде нормалізований номер, а не те, що набрав користувач -->
 <input type="hidden" {name} value={digits.length === 10 ? `+38${digits}` : ''} />

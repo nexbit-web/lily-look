@@ -11,7 +11,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const readCart = vi.fn();
 const clearCart = vi.fn();
-const resolveDeliveryCost = vi.fn();
 const dispatchOrder = vi.fn();
 
 const tx = {
@@ -26,7 +25,6 @@ const db = {
 
 vi.mock('$lib/server/cart', () => ({ readCart, clearCart }));
 vi.mock('$lib/server/db', () => ({ db }));
-vi.mock('$lib/server/delivery-cost', () => ({ resolveDeliveryCost }));
 vi.mock('$lib/server/bot/orders', () => ({ dispatchOrder }));
 
 const { createOrder } = await import('$lib/server/orders');
@@ -56,14 +54,12 @@ const input: CheckoutInput = {
 	deliveryMethod: 'NOVA_POSHTA_BRANCH',
 	deliveryCity: 'Одеса',
 	deliveryAddress: 'Відділення № 12',
-	deliveryCityRef: 'city-ref',
 	comment: ''
 };
 
 beforeEach(() => {
 	readCart.mockResolvedValue(cart);
 	clearCart.mockResolvedValue(undefined);
-	resolveDeliveryCost.mockResolvedValue(9800);
 	dispatchOrder.mockResolvedValue(0);
 	tx.productVariant.updateMany.mockResolvedValue({ count: 1 });
 	tx.order.create.mockResolvedValue({ id: 'order-1', number: 'LL-ABC234' });
@@ -98,18 +94,15 @@ describe('createOrder', () => {
 		expect(clearCart).not.toHaveBeenCalled();
 	});
 
-	it('рахує суму з кошика й доставку з єдиного розрахунку', async () => {
+	/**
+	 * Доставку покупець платить перевізнику на пошті (або її оплачує магазин),
+	 * тож у суму замовлення вона не входить: до сплати — рівно товари.
+	 */
+	it('сума замовлення — товари з кошика, без вигаданої ціни доставки', async () => {
 		await createOrder(cookies, input);
 
-		expect(resolveDeliveryCost).toHaveBeenCalledWith({
-			method: 'NOVA_POSHTA_BRANCH',
-			subtotal: 319_800,
-			itemCount: 2,
-			cityRef: 'city-ref'
-		});
-
 		const data = tx.order.create.mock.calls[0][0].data;
-		expect(data).toMatchObject({ subtotal: 319_800, deliveryCost: 9800, total: 329_600 });
+		expect(data).toMatchObject({ subtotal: 319_800, deliveryCost: 0, total: 319_800 });
 	});
 
 	it('зберігає знімок товару, а не посилання на нього', async () => {

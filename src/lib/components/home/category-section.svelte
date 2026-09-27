@@ -2,8 +2,6 @@
 	import SectionHeading from '$lib/components/home/section-heading.svelte';
 	import ProductGrid from '$lib/components/product/product-grid.svelte';
 	import ProductGridSkeleton from '$lib/components/product/product-grid-skeleton.svelte';
-	import { Button } from '$lib/components/ui/button';
-	import { HOME_CATEGORY_LIMIT } from '$lib/config';
 	import type { HomeSection, ProductCard } from '$lib/types';
 
 	/**
@@ -21,9 +19,11 @@
 
 	const products = $derived(section.products ?? fetched);
 	const titleId = $derived(`section-${section.slug}`);
-	/** Скільки клітинок малює заглушка — рівно стільки й приїде карток. */
-	const placeholders = $derived(Math.min(section.productCount, HOME_CATEGORY_LIMIT));
-	const hasMore = $derived(section.productCount > (products?.length ?? placeholders));
+	/**
+	 * Скільки клітинок малює заглушка — рівно стільки й приїде карток:
+	 * стрічка показує категорію цілком, без кнопки «ще».
+	 */
+	const placeholders = $derived(section.productCount);
 
 	$effect(() => {
 		if (section.products) return;
@@ -69,14 +69,6 @@
 		     сторінка не смикається, коли вони приїдуть. -->
 		<div role="status" aria-label="Завантажуємо речі категорії {section.name}">
 			<ProductGridSkeleton count={placeholders} />
-		</div>
-	{/if}
-
-	{#if hasMore}
-		<!-- На телефоні посилання із заголовка сховане, тож вихід у категорію
-		     потрібен ще й тут — і він єдиний, коли JS вимкнено. -->
-		<div class="mt-6 flex justify-center">
-			<Button href="/catalog/{section.slug}" variant="outline">Дивитись усю категорію</Button>
 		</div>
 	{/if}
 </section>

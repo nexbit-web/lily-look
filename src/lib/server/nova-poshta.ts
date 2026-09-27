@@ -1,5 +1,4 @@
 import { env } from '$env/dynamic/private';
-import { SENDER } from '$lib/config';
 import type { SettlementOption, WarehouseOption } from '$lib/types';
 
 /**
@@ -170,57 +169,4 @@ export async function listWarehouses(
 
 	warehousesCache.set(cacheKey, warehouses);
 	return warehouses;
-}
-
-/** Середня вага одиниці одягу в кг — НП рахує тариф за вагою й об'ємом. */
-const ITEM_WEIGHT_KG = 0.5;
-
-const priceCache = new TtlCache<number>();
-
-type PriceRow = { Cost: number };
-
-/**
- * Реальний тариф Нової Пошти для конкретного напрямку.
- *
- * Повертає копійки або null, якщо API недоступне — тоді викликач
- * підставляє фіксований тариф із config і замовлення не блокується.
- */
-export async function estimateDeliveryPrice(options: {
-	cityRef: string;
-	/** Оголошена вартість у копійках. */
-	declaredValue: number;
-	itemCount: number;
-	toDoors: boolean;
-}): Promise<number | null> {
-	const { cityRef, declaredValue, itemCount, toDoors } = options;
-	if (!cityRef || !isNovaPoshtaConfigured()) return null;
-
-	const weight = Math.max(ITEM_WEIGHT_KG, itemCount * ITEM_WEIGHT_KG);
-	const cacheKey = `price:${cityRef}:${toDoors}:${weight}:${Math.round(declaredValue / 10000)}`;
-	const cached = priceCache.get(cacheKey);
-	if (cached !== undefined) return cached;
-
-	try {
-		const rows = await call<PriceRow>('InternetDocument', 'getDocumentPrice', {
-			CitySender: SENDER.cityRef,
-			CityRecipient: cityRef,
-			ServiceType: toDoors ? 'WarehouseDoors' : 'WarehouseWarehouse',
-			CargoType: 'Cargo',
-			Weight: String(weight),
-			// НП очікує гривні, у нас усе в копійках.
-			Cost: String(Math.round(declaredValue / 100)),
-			SeatsAmount: String(itemCount)
-		});
-
-		const cost = rows[0]?.Cost;
-		if (typeof cost !== 'number') return null;
-
-		const kopiyky = Math.round(cost * 100);
-		priceCache.set(cacheKey, kopiyky);
-		return kopiyky;
-	} catch {
-		// Тариф — не критична частина: краще показати базову ціну,
-		// ніж завалити чекаут через недоступність стороннього API.
-		return null;
-	}
 }

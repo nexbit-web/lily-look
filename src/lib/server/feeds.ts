@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { RETURN_DAYS, SITE } from '$lib/config';
 import { portableImageSrc } from '$lib/image';
-import { formatPrice } from '$lib/money';
+import { formatPrice, priceAmount } from '$lib/money';
 import { plural } from '$lib/plural';
 import { framesForColor } from '$lib/product-images';
 import { daysLabel, deliveryTerms, FACTS } from '$lib/store-facts';
@@ -20,7 +20,7 @@ import type { FeedProduct } from './catalog.js';
 
 /** Копійки → «2199.00 UAH», як того вимагає Merchant Center. */
 function feedPrice(kopiyky: number): string {
-	return `${(kopiyky / 100).toFixed(2)} UAH`;
+	return `${priceAmount(kopiyky)} UAH`;
 }
 
 function xml(text: string): string {

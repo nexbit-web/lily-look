@@ -3,6 +3,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { ORDER_STATUS_LABELS, SITE, deliveryMethod } from '$lib/config';
 	import { formatPrice } from '$lib/money';
+	import { deliveryPriceLabel } from '$lib/store-facts';
 	import CheckIcon from '@lucide/svelte/icons/check';
 	import type { PageProps } from './$types';
 
@@ -10,6 +11,13 @@
 
 	const order = $derived(data.order);
 	const delivery = $derived(deliveryMethod(order.deliveryMethod));
+	const deliveryLabel = $derived(
+		deliveryPriceLabel({
+			method: order.deliveryMethod,
+			subtotal: order.subtotal,
+			deliveryCost: order.deliveryCost
+		})
+	);
 </script>
 
 <svelte:head>
@@ -90,9 +98,7 @@
 			</div>
 			<div class="flex justify-between">
 				<span class="text-muted-foreground">Доставка</span>
-				<span class="tabular-nums">
-					{order.deliveryCost === 0 ? 'Безкоштовно' : formatPrice(order.deliveryCost)}
-				</span>
+				<span class="tabular-nums">{deliveryLabel}</span>
 			</div>
 			<div class="flex justify-between border-t pt-2 text-base">
 				<span>Разом</span>

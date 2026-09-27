@@ -7,7 +7,7 @@
 	import HandbagIcon from '@lucide/svelte/icons/handbag';
 	import MenuIcon from '@lucide/svelte/icons/menu';
 	import SearchIcon from '@lucide/svelte/icons/search';
-	import type { Component } from 'svelte';
+	import { tick, type Component } from 'svelte';
 
 	let { categories, cartCount }: { categories: CategoryLink[]; cartCount: number } = $props();
 
@@ -25,13 +25,26 @@
 		categories: CategoryLink[];
 	}> | null>(null);
 
+	/**
+	 * Спершу компонент з'являється закритим, і лише в наступному такті
+	 * відкривається. Якщо поставити «відкрито» разом із першою появою, він
+	 * народжується вже відкритим — а на першому малюванні Svelte анімацію
+	 * появи не програє: пошук вискакував ривком, і плавно відкривався тільки
+	 * з другого разу.
+	 */
 	async function openMenu() {
-		MobileMenu ??= (await import('$lib/components/layout/mobile-menu.svelte')).default;
+		if (!MobileMenu) {
+			MobileMenu = (await import('$lib/components/layout/mobile-menu.svelte')).default;
+			await tick();
+		}
 		mobileOpen = true;
 	}
 
 	async function openSearch() {
-		SearchOverlay ??= (await import('$lib/components/layout/search-overlay.svelte')).default;
+		if (!SearchOverlay) {
+			SearchOverlay = (await import('$lib/components/layout/search-overlay.svelte')).default;
+			await tick();
+		}
 		searchOpen = true;
 	}
 

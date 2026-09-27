@@ -1,6 +1,7 @@
 import { deliveryMethod, type DeliveryMethodValue } from '$lib/config';
 import { formatPrice } from '$lib/money';
 import { plural } from '$lib/plural';
+import { deliveryPriceLabel } from '$lib/store-facts';
 import type { CartLine } from '$lib/types';
 
 /**
@@ -132,7 +133,7 @@ export function buildOrderMessage(order: OrderMessage): string {
 	const money = [
 		'',
 		`Товари · ${formatPrice(order.subtotal)}`,
-		`Доставка · ${order.deliveryCost === 0 ? 'безкоштовно' : formatPrice(order.deliveryCost)}`,
+		`Доставка · ${deliveryNote(order)}`,
 		`<b>Разом · ${formatPrice(order.total)}</b>`,
 		'',
 		escapeHtml(order.payment),
@@ -162,4 +163,15 @@ export function buildOrderMessage(order: OrderMessage): string {
 			: kept;
 
 	return [...head, ...body, '', '<b>Зібрати</b>', ...itemRows, ...money].join('\n');
+}
+
+/**
+ * Хто платить перевізнику — для менеджера це вказівка, як оформити
+ * накладну: безкоштовну доставку оплачує магазин (платник — відправник),
+ * решту — покупець на пошті (платник — отримувач).
+ */
+function deliveryNote(order: Pick<OrderMessage, 'method' | 'subtotal' | 'deliveryCost'>): string {
+	const label = deliveryPriceLabel(order).toLowerCase();
+	if (order.deliveryCost > 0 || deliveryMethod(order.method).kind === 'pickup') return label;
+	return label === 'безкоштовно' ? 'безкоштовно, платить магазин' : `${label}, платить отримувач`;
 }

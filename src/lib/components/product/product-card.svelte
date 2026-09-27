@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { IMAGE_WIDTHS, fallbackToOriginal, imageSrcSet } from '$lib/image';
+	import { IMAGE_CARD, fallbackToOriginal, imageSrc } from '$lib/image';
 	import { discountPercent, formatPrice } from '$lib/money';
 	import { plural } from '$lib/plural';
 	import type { ProductCard } from '$lib/types';
@@ -25,16 +25,17 @@
 	const discount = $derived(discountPercent(product.price, product.compareAt));
 
 	/**
-	 * Картка ніколи не ширша за половину телефона або чверть контейнера,
-	 * тож просити в CDN оригінал немає сенсу — браузер обере з `srcset`
-	 * найменший кадр, який не буде видно як мило.
-	 */
-	const SIZES = '(min-width: 1024px) 280px, 50vw';
-
-	/**
-	 * Поки фото не завантажилось, на його місці пульсує заглушка. Картки
-	 * нижче екрана тягнуть фото ліниво, і без заглушки там зяяла б сіра
-	 * пляма — незрозуміло, чи то вантажиться, чи то зламалось.
+	 * Поки фото не завантажилось, під ним пульсує заглушка. Картки нижче
+	 * екрана тягнуть фото ліниво, і без заглушки там зяяла б сіра пляма —
+	 * незрозуміло, чи то вантажиться, чи то зламалось.
+	 *
+	 * Заглушка лежить окремим шаром ПІД фото, а саме фото ніколи не
+	 * ховається. Колись було навпаки: кадр стояв прозорим, доки скрипт не
+	 * скаже «завантажилось». Щойно цей сигнал запізнювався (повільний
+	 * телефон, довга гідратація, пропущена подія), картка лишалась сірою
+	 * з уже готовим фото — і проявлялась лише від наведення курсора. Тепер
+	 * браузер малює кадр, щойно його отримав, а `loaded` тільки прибирає
+	 * заглушку, якої під фото й так не видно.
 	 */
 	let loaded = $state(false);
 	let cover = $state<HTMLImageElement>();
@@ -68,18 +69,15 @@
 <a href="/product/{product.slug}" class="group block">
 	<!-- На телефоні кадр вищий: у дві колонки річ видно дрібно, і зайва
 	     висота працює краще за зайві піксели ширини. -->
-	<div
-		class={cn(
-			'relative aspect-3/4 overflow-hidden rounded-sm bg-muted sm:aspect-4/5',
-			product.image && !loaded && 'animate-pulse'
-		)}
-	>
+	<div class="relative aspect-3/4 overflow-hidden rounded-sm bg-muted sm:aspect-4/5">
+		{#if product.image && !loaded}
+			<div class="absolute inset-0 animate-pulse bg-muted" aria-hidden="true"></div>
+		{/if}
+
 		{#if product.image}
 			<img
 				bind:this={cover}
-				src={product.image.url}
-				srcset={imageSrcSet(product.image.url, IMAGE_WIDTHS.card)}
-				sizes={SIZES}
+				src={imageSrc(product.image.url, IMAGE_CARD)}
 				alt={product.image.alt}
 				loading={priority ? 'eager' : 'lazy'}
 				fetchpriority={lead ? 'high' : undefined}
@@ -87,13 +85,9 @@
 				onload={() => (loaded = true)}
 				onerror={(event) => product.image && fallbackToOriginal(event, product.image.url)}
 				class={cn(
-					// Прозорість і масштаб в одному переході: два окремих класи
-					// `transition-*` злилися б в один, і проявлення зникло б.
-					'size-full object-cover transition-[opacity,transform] duration-500 ease-out motion-reduce:transition-none',
-					// Кадр проявляється, а не стає ривком поверх заглушки. Фото
-					// першого екрана не гасимо: зайва анімація там лише
-					// відкладала б найбільший елемент сторінки.
-					!priority && !loaded && 'opacity-0',
+					// `relative` — щоб фото лягло поверх заглушки: абсолютний шар
+					// інакше малювався б над звичайним елементом.
+					'relative size-full object-cover transition-transform duration-500 ease-out motion-reduce:transition-none',
 					// Без другого фото картка не має чим відповісти на наведення —
 					// тоді лишаємо легкий зум.
 					!(product.hoverImage && canHover) && 'group-hover:scale-105'
@@ -105,9 +99,7 @@
 			<!-- Друге фото лежить зверху й проявляється. Перше не гасимо: інакше
 			     на середині переходу прозирав би фон картки. -->
 			<img
-				src={product.hoverImage.url}
-				srcset={imageSrcSet(product.hoverImage.url, IMAGE_WIDTHS.card)}
-				sizes={SIZES}
+				src={imageSrc(product.hoverImage.url, IMAGE_CARD)}
 				alt=""
 				aria-hidden="true"
 				loading="lazy"

@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { Button } from '$lib/components/ui/button';
 	import * as Command from '$lib/components/ui/command';
 	import * as Popover from '$lib/components/ui/popover';
 	import { Skeleton } from '$lib/components/ui/skeleton';
@@ -100,22 +99,24 @@
 <Popover.Root bind:open onOpenChange={(value) => onOpenChange(value)}>
 	<Popover.Trigger {disabled}>
 		{#snippet child({ props })}
-			<Button
+			<!-- Та сама рамка, що й у текстових полів (`field-input`). Плейсхолдера
+			     в кнопки немає, тож `data-float` тримає підпис над нею завжди. -->
+			<button
 				{...props}
 				{id}
-				variant="outline"
+				type="button"
 				role="combobox"
 				aria-expanded={open}
+				aria-invalid={invalid}
+				data-float
 				{disabled}
-				class={cn(
-					'h-11 w-full justify-between px-4 text-sm font-normal tracking-normal normal-case',
-					!selected && 'text-muted-foreground',
-					invalid && 'border-destructive ring-2 ring-destructive/20'
-				)}
+				class="field-input flex items-center justify-between gap-2 text-left"
 			>
-				<span class="truncate">{selected?.label ?? placeholder}</span>
-				<ChevronDownIcon class="ml-2 size-4 shrink-0 opacity-50" />
-			</Button>
+				<span class={cn('truncate', !selected && 'text-muted-foreground')}>
+					{selected?.label ?? placeholder}
+				</span>
+				<ChevronDownIcon class="size-4 shrink-0 opacity-50" />
+			</button>
 		{/snippet}
 	</Popover.Trigger>
 

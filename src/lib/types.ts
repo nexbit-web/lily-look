@@ -124,8 +124,6 @@ export type ProductDetail = {
 export type DeliveryOption = {
 	value: string;
 	label: string;
-	/** Копійки. */
-	cost: number;
 	shipsToday: boolean;
 	/** «10–12 вересня». */
 	eta: string;

@@ -31,7 +31,6 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 		value: method.value,
 		label: method.label,
 		hint: method.hint,
-		cost: method.cost,
 		...deliveryWindow(now, method.days)
 	}));
 

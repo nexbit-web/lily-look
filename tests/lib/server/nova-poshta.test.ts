@@ -1,4 +1,3 @@
-import { SENDER } from '$lib/config';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
@@ -9,13 +8,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const env = { NOVA_POSHTA_API_KEY: 'secret-key' } as Record<string, string | undefined>;
 vi.mock('$env/dynamic/private', () => ({ env }));
 
-const {
-	estimateDeliveryPrice,
-	isNovaPoshtaConfigured,
-	listWarehouses,
-	NovaPoshtaError,
-	searchSettlements
-} = await import('$lib/server/nova-poshta');
+const { isNovaPoshtaConfigured, listWarehouses, NovaPoshtaError, searchSettlements } =
+	await import('$lib/server/nova-poshta');
 
 const fetchMock = vi.fn();
 
@@ -170,56 +164,5 @@ describe('помилки', () => {
 		fetchMock.mockResolvedValue({ ok: false, status: 503, json: async () => ({}) } as Response);
 
 		await expect(searchSettlements(term())).rejects.toBeInstanceOf(NovaPoshtaError);
-	});
-});
-
-describe('estimateDeliveryPrice', () => {
-	it('рахує від міста відправника й повертає копійки', async () => {
-		fetchMock.mockResolvedValue(reply({ success: true, data: [{ Cost: 98 }] }));
-
-		const cost = await estimateDeliveryPrice({
-			cityRef: 'city-ref',
-			declaredValue: 159_900,
-			itemCount: 2,
-			toDoors: false
-		});
-
-		expect(cost).toBe(9800);
-
-		const body = JSON.parse(fetchMock.mock.calls[0][1].body);
-		expect(body.methodProperties).toMatchObject({
-			CitySender: SENDER.cityRef,
-			CityRecipient: 'city-ref',
-			ServiceType: 'WarehouseWarehouse',
-			// оголошена вартість — у гривнях, у нас усе в копійках
-			Cost: '1599'
-		});
-	});
-
-	it('на будь-який збій віддає null — чекаут не має падати', async () => {
-		fetchMock.mockRejectedValue(new Error('таймаут'));
-
-		await expect(
-			estimateDeliveryPrice({
-				cityRef: 'city-ref',
-				declaredValue: 100_000,
-				itemCount: 1,
-				toDoors: true
-			})
-		).resolves.toBeNull();
-	});
-
-	it('без ключа мовчки повертає null', async () => {
-		env.NOVA_POSHTA_API_KEY = '';
-
-		await expect(
-			estimateDeliveryPrice({
-				cityRef: 'city-ref',
-				declaredValue: 100_000,
-				itemCount: 1,
-				toDoors: false
-			})
-		).resolves.toBeNull();
-		expect(fetchMock).not.toHaveBeenCalled();
 	});
 });

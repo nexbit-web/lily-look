@@ -89,16 +89,59 @@
 		index = (next + banners.length) % banners.length;
 	}
 
-	// Відлік іде заново з кожним слайдом, хоч би хто його перемкнув: після
-	// свайпу чи кліку по смужці покупець дивиться банер повний час, а не
-	// залишок чужого відліку. Під курсором і у фокусі прогортання стоїть —
-	// інакше банер перемкнувся б саме тоді, коли по ньому цілять клікнути.
+	/**
+	 * Автопрогортання веде сама смужка під банером: слайд перемикається, коли
+	 * її анімація добігла кінця (`animationend`).
+	 *
+	 * Раніше були два незалежні годинники — CSS-смужка й `setTimeout`. Пауза
+	 * під курсором заморожувала смужку й продовжувала її з того самого місця,
+	 * а таймер скидала й починала заново. Навели мишу на 90 % — смужка
+	 * добігала за пів секунди, а банер стояв ще повні 4.5 с: «смуга дійшла до
+	 * кінця, а картинка не перемикається». Тепер годинник один, і пауза
+	 * зупиняє обидва разом.
+	 */
+	function progressDone() {
+		if (!paused) go(index + 1);
+	}
+
+	/**
+	 * Страховка: якщо анімація так і не закінчилась (браузер вимкнув
+	 * анімації, смужку не намалювало), банер усе одно не застрягне. Відлік
+	 * довший за смужку, тож у нормальній роботі першою завжди встигає вона —
+	 * навіть одразу після паузи, коли смужці лишається менше повного кола.
+	 */
+	const WATCHDOG = 1.5;
 	$effect(() => {
 		if (paused || banners.length < 2) return;
 		const shown = index;
-		const timer = setTimeout(() => go(shown + 1), interval);
+		const timer = setTimeout(() => go(shown + 1), interval * WATCHDOG);
 		return () => clearTimeout(timer);
 	});
+
+	/**
+	 * Пауза — лише від справжньої миші й від фокуса з клавіатури.
+	 *
+	 * Дотик теж шле `mouseenter`, але `mouseleave` — ні, а тап по стрілці
+	 * лишає на ній фокус: на телефоні після першого ж дотику банер ставав
+	 * на паузу, доки не тапнеш деінде. Фокус від тапу чи кліку браузер не
+	 * вважає `:focus-visible` — за цим і відрізняємо клавіатуру.
+	 */
+	function pointerEnter(event: PointerEvent) {
+		if (event.pointerType === 'mouse') paused = true;
+	}
+	function pointerLeave(event: PointerEvent) {
+		if (event.pointerType === 'mouse') paused = false;
+	}
+	function focusIn(event: FocusEvent) {
+		if (event.target instanceof HTMLElement && focusVisible(event.target)) paused = true;
+	}
+	function focusVisible(element: HTMLElement): boolean {
+		try {
+			return element.matches(':focus-visible');
+		} catch {
+			return true;
+		}
+	}
 
 	/**
 	 * Свайп на телефоні. Поріг відсікає тремтіння пальця під час звичайного
@@ -143,9 +186,9 @@
 {/snippet}
 
 <section
-	onmouseenter={() => (paused = true)}
-	onmouseleave={() => (paused = false)}
-	onfocusin={() => (paused = true)}
+	onpointerenter={pointerEnter}
+	onpointerleave={pointerLeave}
+	onfocusin={focusIn}
 	onfocusout={() => (paused = false)}
 	ontouchstart={touchStart}
 	ontouchend={touchEnd}
@@ -222,11 +265,14 @@
 								<!--
 									Смужка заповнюється рівно за час показу слайда — видно,
 									що зараз щось перемкнеться, і скільки лишилось чекати.
+									Кінець її анімації й перемикає слайд (див. progressDone).
 									key на index перезапускає анімацію на кожному слайді.
 								-->
 								{#key index}
 									<span
 										class="block h-full origin-left bg-foreground/70"
+										data-progress
+										onanimationend={progressDone}
 										style="animation: hero-progress {interval}ms linear forwards; animation-play-state: {paused
 											? 'paused'
 											: 'running'}"

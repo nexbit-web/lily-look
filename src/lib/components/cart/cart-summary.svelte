@@ -29,7 +29,7 @@
 			<div class="flex items-baseline justify-between gap-4">
 				<dt class="text-muted-foreground">Доставка</dt>
 				<dd class={freeDelivery ? 'text-success' : 'text-muted-foreground'}>
-					{freeDelivery ? 'Безкоштовно' : 'Розрахуємо далі'}
+					{freeDelivery ? 'Безкоштовно' : 'За тарифом перевізника'}
 				</dd>
 			</div>
 		</dl>

@@ -25,8 +25,6 @@ export const checkoutSchema = z.object({
 	deliveryMethod: z.enum(deliveryValues),
 	deliveryCity: z.string().trim().max(120).optional().default(''),
 	deliveryAddress: z.string().trim().max(240).optional().default(''),
-	/** Ref міста в довіднику НП. Не зберігаємо — потрібен лише для тарифу. */
-	deliveryCityRef: z.string().trim().max(64).optional().default(''),
 	comment: z.string().trim().max(500, 'Не більше 500 символів').optional().default('')
 });
 

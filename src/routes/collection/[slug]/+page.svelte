@@ -37,9 +37,6 @@
 			<p class="text-sm text-muted-foreground tabular-nums">{models(data.total)}</p>
 		</div>
 		<p class="mt-3 max-w-2xl text-pretty">{data.collection.lead}</p>
-		{#if data.intro}
-			<p class="mt-3 max-w-3xl text-sm text-muted-foreground">{data.intro}</p>
-		{/if}
 	</header>
 
 	{#if data.shelves.length > 1}
@@ -81,4 +78,10 @@
 			</section>
 		{/each}
 	</div>
+
+	<!-- Факти для пошуковика й асистентів — під товарами, як і в категорії:
+	     біля заголовка покупець хоче бачити речі, а не абзац про доставку. -->
+	{#if data.intro}
+		<p class="mt-16 max-w-3xl border-t pt-6 text-xs text-muted-foreground">{data.intro}</p>
+	{/if}
 </div>

@@ -2,6 +2,7 @@
 	import { portableImageSrc } from '$lib/image';
 	import { page } from '$app/state';
 	import { CURRENCY, SITE } from '$lib/config';
+	import { priceAmount } from '$lib/money';
 
 	/**
 	 * Мета-теги сторінки в одному місці.
@@ -38,6 +39,12 @@
 	} = $props();
 
 	const href = $derived(new URL(canonical ?? page.url.pathname, page.url.origin).href);
+
+	/**
+	 * Прев'ю в месенджерах будується лише з абсолютної адреси: відносну
+	 * «/banners/…» Telegram і Facebook просто проігнорують.
+	 */
+	const imageHref = $derived(image ? new URL(portableImageSrc(image), page.url.origin).href : null);
 </script>
 
 <svelte:head>
@@ -55,10 +62,10 @@
 	<meta property="og:title" content={title} />
 	<meta property="og:description" content={description} />
 	<meta property="og:url" content={href} />
-	{#if image}
+	{#if imageHref}
 		<!-- JPEG, а не f_auto: прев'ю будують Telegram, Viber і Facebook, і не
 		     кожен із них покаже AVIF, який CDN віддав би за їхнім Accept. -->
-		<meta property="og:image" content={portableImageSrc(image)} />
+		<meta property="og:image" content={imageHref} />
 		{#if imageAlt}
 			<meta property="og:image:alt" content={imageAlt} />
 		{/if}
@@ -68,7 +75,7 @@
 	{/if}
 
 	{#if type === 'product' && price !== null}
-		<meta property="product:price:amount" content={(price / 100).toFixed(2)} />
+		<meta property="product:price:amount" content={priceAmount(price)} />
 		<meta property="product:price:currency" content={CURRENCY} />
 	{/if}
 </svelte:head>

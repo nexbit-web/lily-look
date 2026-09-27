@@ -1,4 +1,4 @@
-import { CATALOG_CACHE_MS, HOME_CATEGORY_LIMIT } from '$lib/config';
+import { CATALOG_CACHE_MS } from '$lib/config';
 import { cached } from '$lib/server/cache';
 import { listCategoryProducts } from '$lib/server/catalog';
 import { error, json } from '@sveltejs/kit';
@@ -13,7 +13,7 @@ import type { RequestHandler } from './$types';
  */
 export const GET: RequestHandler = async ({ params, setHeaders }) => {
 	const products = await cached(`category:${params.slug}`, CATALOG_CACHE_MS, () =>
-		listCategoryProducts(params.slug, HOME_CATEGORY_LIMIT)
+		listCategoryProducts(params.slug)
 	);
 	if (products.length === 0) error(404, 'Категорія порожня');
 

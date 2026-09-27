@@ -10,7 +10,6 @@ const valid = {
 	deliveryMethod: 'NOVA_POSHTA_BRANCH',
 	deliveryCity: 'Одеса',
 	deliveryAddress: 'Відділення № 12',
-	deliveryCityRef: 'db5c896e-391c-11dd-90d9-001a92567626',
 	comment: ''
 };
 

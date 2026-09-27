@@ -4,12 +4,9 @@
 	import Field from '$lib/components/checkout/field.svelte';
 	import PhoneField from '$lib/components/checkout/phone-field.svelte';
 	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
-	import { Skeleton } from '$lib/components/ui/skeleton';
-	import { Textarea } from '$lib/components/ui/textarea';
 	import {
 		DELIVERY_METHODS,
-		deliveryCostFor,
+		isDeliveryFree,
 		RETURN_DAYS,
 		type DeliveryMethodValue
 	} from '$lib/config';
@@ -41,10 +38,6 @@
 	let deliveryMethod = $state<DeliveryMethodValue>('NOVA_POSHTA_BRANCH');
 	let city = $state('');
 	let address = $state('');
-	let cityRef = $state('');
-	/** Реальний тариф НП; null — ще невідомий або перевізник інший. */
-	let liveCost = $state<number | null>(null);
-	let costLoading = $state(false);
 
 	let submitting = $state(false);
 	/** Помилки показуємо лише після спроби відправки або виходу з поля — */
@@ -89,12 +82,11 @@
 	});
 
 	/**
-	 * Той самий порядок, що й на сервері (resolveDeliveryCost):
-	 * безкоштовно від порогу → реальний тариф НП → фіксована ставка.
+	 * Доставку, коли вона не безкоштовна, покупець платить перевізнику на
+	 * пошті, тож у суму до сплати магазину вона не входить. Суму тарифу не
+	 * називаємо — чому, див. `isDeliveryFree`.
 	 */
-	const baseCost = $derived(deliveryCostFor(deliveryMethod, cart.subtotal));
-	const deliveryCost = $derived(baseCost === 0 ? 0 : (liveCost ?? baseCost));
-	const total = $derived(cart.subtotal + deliveryCost);
+	const freeDelivery = $derived(isDeliveryFree(deliveryMethod, cart.subtotal));
 
 	function markTouched(field: string) {
 		touched[field] = true;
@@ -141,7 +133,8 @@
 					required
 					error={errors.customerName ?? ''}
 				>
-					<Input
+					<input
+						class="field-input"
 						id="customerName"
 						name="customerName"
 						placeholder="Олена Ковальчук"
@@ -173,7 +166,8 @@
 				error={errors.customerEmail ?? ''}
 				hint="Надішлемо номер накладної, коли відправимо замовлення"
 			>
-				<Input
+				<input
+					class="field-input"
 					id="customerEmail"
 					name="customerEmail"
 					type="email"
@@ -190,9 +184,6 @@
 			bind:method={deliveryMethod}
 			bind:city
 			bind:address
-			bind:cityRef
-			bind:liveCost
-			bind:costLoading
 			subtotal={cart.subtotal}
 			{novaPoshtaLive}
 			{errors}
@@ -228,14 +219,14 @@
 		<section class="space-y-4">
 			<h2 class="font-heading text-xl">Коментар</h2>
 			<Field id="comment" label="Побажання до замовлення" error={errors.comment ?? ''}>
-				<Textarea
+				<textarea
+					class="field-input"
 					id="comment"
 					name="comment"
 					rows={3}
 					placeholder="Наприклад: зателефонуйте після 18:00"
 					bind:value={comment}
-					onblur={() => markTouched('comment')}
-				/>
+					onblur={() => markTouched('comment')}></textarea>
 			</Field>
 		</section>
 	</div>
@@ -263,23 +254,22 @@
 				</div>
 				<div class="flex items-center justify-between">
 					<span class="text-muted-foreground">Доставка</span>
-					{#if costLoading && baseCost !== 0}
-						<Skeleton class="h-4 w-16 rounded-md" />
-					{:else}
-						<span class="tabular-nums {deliveryCost === 0 ? 'font-medium text-success' : ''}">
-							{deliveryCost === 0 ? 'Безкоштовно' : formatPrice(deliveryCost)}
-						</span>
-					{/if}
+					<span class={freeDelivery ? 'font-medium text-success' : 'text-muted-foreground'}>
+						{freeDelivery ? 'Безкоштовно' : 'За тарифом перевізника'}
+					</span>
 				</div>
-
-				{#if deliveryCost > 0 && liveCost !== null}
-					<p class="text-xs text-muted-foreground">Точний тариф Нової Пошти для вашого напрямку.</p>
-				{/if}
 			</div>
 
-			<div class="flex justify-between border-t pt-4">
-				<span>До сплати</span>
-				<span class="font-medium tabular-nums">{formatPrice(total)}</span>
+			<div class="border-t pt-4">
+				<div class="flex justify-between">
+					<span>До сплати</span>
+					<span class="font-medium tabular-nums">{formatPrice(cart.subtotal)}</span>
+				</div>
+				{#if !freeDelivery}
+					<p class="mt-2 text-xs text-muted-foreground">
+						Доставку оплачуєте на пошті при отриманні — за тарифом перевізника.
+					</p>
+				{/if}
 			</div>
 
 			{#if serverMessage}

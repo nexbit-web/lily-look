@@ -11,16 +11,11 @@
 				<Skeleton class="h-6 w-44 rounded-lg" />
 				<div class="grid gap-4 sm:grid-cols-2">
 					{#each { length: 2 }, field (field)}
-						<div class="space-y-2">
-							<Skeleton class="h-3.5 w-28 rounded-md" />
-							<Skeleton class="h-10 w-full rounded-xl" />
-						</div>
+						<!-- Підпис живе всередині поля, тож каркас — лише саме поле. -->
+						<Skeleton class="h-14.5 w-full rounded-xl" />
 					{/each}
 				</div>
-				<div class="space-y-2">
-					<Skeleton class="h-3.5 w-24 rounded-md" />
-					<Skeleton class="h-10 w-full rounded-xl" />
-				</div>
+				<Skeleton class="h-14.5 w-full rounded-xl" />
 			</section>
 		{/each}
 

@@ -1,7 +1,7 @@
 import { IMAGE_LARGE, imageSrc } from '$lib/image';
 import { framesForColor } from '$lib/product-images';
 import { deliveryMethod, FREE_DELIVERY_FROM, RETURN_DAYS, SENDER, SITE } from '$lib/config';
-import { formatPrice } from '$lib/money';
+import { formatPrice, priceAmount } from '$lib/money';
 import { plural } from '$lib/plural';
 import type { ProductCard, ProductDetail } from '$lib/types';
 
@@ -20,11 +20,6 @@ import type { ProductCard, ProductDetail } from '$lib/types';
 
 /** Вузол графа — звичайний об'єкт Schema.org без @context. */
 export type JsonLdNode = Record<string, unknown>;
-
-/** Копійки → рядок у гривнях, як того вимагає Schema.org: "1299.00". */
-function money(kopiyky: number): string {
-	return (kopiyky / 100).toFixed(2);
-}
 
 function absolute(origin: string, path: string): string {
 	return new URL(path, origin).href;
@@ -111,11 +106,9 @@ function offerTerms(origin: string) {
 	return {
 		shippingDetails: {
 			'@type': 'OfferShippingDetails',
-			shippingRate: {
-				'@type': 'MonetaryAmount',
-				value: money(branch.cost),
-				currency: 'UAH'
-			},
+			// Суми доставки немає свідомо: покупець платить перевізнику за його
+			// тарифом, і точної цифри сайт не знає (див. `isDeliveryFree`).
+			// Вигадана «90 грн» у видачі — та сама обіцянка, що й на сайті.
 			shippingDestination: {
 				'@type': 'DefinedRegion',
 				addressCountry: 'UA'
@@ -123,12 +116,17 @@ function offerTerms(origin: string) {
 			deliveryTime: {
 				'@type': 'ShippingDeliveryTime',
 				handlingTime: { '@type': 'QuantitativeValue', minValue: 0, maxValue: 1, unitCode: 'DAY' },
-				transitTime: { '@type': 'QuantitativeValue', minValue: 1, maxValue: 3, unitCode: 'DAY' }
+				transitTime: {
+					'@type': 'QuantitativeValue',
+					minValue: branch.days[0],
+					maxValue: branch.days[1],
+					unitCode: 'DAY'
+				}
 			},
 			// Поріг безкоштовної доставки — теж факт із config.
 			freeShippingThreshold: {
 				'@type': 'MonetaryAmount',
-				value: money(FREE_DELIVERY_FROM),
+				value: priceAmount(FREE_DELIVERY_FROM),
 				currency: 'UAH'
 			}
 		},
@@ -159,7 +157,7 @@ function strikethrough(price: number, compareAt: number | null) {
 		priceSpecification: {
 			'@type': 'UnitPriceSpecification',
 			priceType: 'https://schema.org/StrikethroughPrice',
-			price: money(compareAt),
+			price: priceAmount(compareAt),
 			priceCurrency: 'UAH'
 		}
 	};
@@ -176,7 +174,7 @@ function offerNode(
 		'@type': 'Offer',
 		url,
 		priceCurrency: 'UAH',
-		price: money(price),
+		price: priceAmount(price),
 		...strikethrough(price, compareAt),
 		availability: inStock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
 		itemCondition: 'https://schema.org/NewCondition',
@@ -407,6 +405,26 @@ function shelfList(shelves: string[]): string {
 }
 
 /**
+ * Скільки символів Google показує без обрізання: заголовок — близько 70,
+ * опис — близько 160. Довше — у видачі «…» посеред слова.
+ */
+export const TITLE_LIMIT = 70;
+export const DESCRIPTION_LIMIT = 160;
+
+/**
+ * Текст із найдовшим початком переліку, який ще вміщується в `limit`.
+ * Перелік береться з CRM і росте разом із каталогом, тож обрізаємо його
+ * цілими пунктами, а не посеред слова. Один пункт лишається завжди.
+ */
+function fitting(items: string[], render: (list: string[]) => string, limit: number): string {
+	for (let count = items.length; count > 1; count -= 1) {
+		const text = render(items.slice(0, count));
+		if (text.length <= limit) return text;
+	}
+	return render(items.slice(0, 1));
+}
+
+/**
  * Вступ колекції — ті самі факти, що й у категорії, плюс її склад. Саме
  * склад пошуковик і асистент зіставляють із запитом на кшталт «осінній
  * жіночий верхній одяг»: слова «колекція» в такому запиті немає.
@@ -423,10 +441,24 @@ export function collectionIntro(
 	].join(' ');
 }
 
-/** Заголовок у видачі: три перші полиці — найважливіше, що в колекції є. */
+/** Заголовок у видачі: перші полиці — стільки, скільки вміститься. */
 export function collectionTitle(name: string, shelves: string[]): string {
-	const lead = shelves.length > 0 ? ` — ${shelfList(shelves.slice(0, 3))}` : '';
-	return `${name} жіночого одягу${lead} | ${SITE.name}`;
+	if (shelves.length === 0) return `${name} жіночого одягу | ${SITE.name}`;
+	return fitting(
+		shelves.slice(0, 3),
+		(list) => `${name} жіночого одягу — ${shelfList(list)} | ${SITE.name}`,
+		TITLE_LIMIT
+	);
+}
+
+/** Опис вітрини каталогу: які категорії є — стільки, скільки вміститься. */
+export function catalogDescription(categories: string[]): string {
+	return fitting(
+		categories,
+		(list) =>
+			`Категорії жіночого одягу ${SITE.name}: ${shelfList(list)}${list.length < categories.length ? ' та інше' : ''}. Доставка Новою Поштою по Україні, обмін ${RETURN_DAYS} ${plural(RETURN_DAYS, 'день', 'дні', 'днів')}.`,
+		DESCRIPTION_LIMIT
+	);
 }
 
 export function collectionDescription(

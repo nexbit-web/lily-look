@@ -63,6 +63,30 @@ describe('картка товару', () => {
 		expect(document.querySelector('img')).toHaveAttribute('loading', 'lazy');
 	});
 
+	/**
+	 * Баг, який ловили на живому сайті: фото вже завантажене, а картка сіра,
+	 * доки на неї не навести курсор. Кадр стояв прозорим, поки скрипт не
+	 * підтвердить завантаження, — і коли підтвердження запізнювалось, готове
+	 * фото лишалось невидимим. Тепер фото не ховається ніколи.
+	 */
+	it('фото видно, навіть поки скрипт не дізнався, що воно завантажилось', () => {
+		const { container } = render(ProductCard, { product: product() });
+
+		const cover = screen.getByRole('img', { name: 'Сукня спереду' });
+		expect(cover).not.toHaveClass('opacity-0');
+		// Пульсує тільки заглушка під фото, а не вся рамка разом із кадром.
+		expect(cover.closest('.animate-pulse')).toBeNull();
+		expect(container.querySelector('.animate-pulse')).not.toBeNull();
+	});
+
+	it('фото приїхало — заглушку прибрано', async () => {
+		const { container } = render(ProductCard, { product: product() });
+
+		await fireEvent.load(screen.getByRole('img', { name: 'Сукня спереду' }));
+
+		expect(container.querySelector('.animate-pulse')).toBeNull();
+	});
+
 	it('показує, що товару немає в наявності', () => {
 		render(ProductCard, { product: product({ inStock: false }) });
 
@@ -82,8 +106,11 @@ describe('фото картки', () => {
 		});
 
 		const image = screen.getByAltText('Сукня');
-		expect(image.getAttribute('srcset')).toContain('c_limit,w_400');
-		expect(image.getAttribute('sizes')).toBeTruthy();
+		// Один розмір на всі екрани: CDN ріже кадр один раз, а не 400 і 800 окремо.
+		expect(image.getAttribute('src')).toBe(
+			'https://res.cloudinary.com/demo/image/upload/f_auto,q_auto,c_limit,w_800/v1/lily/abc.png'
+		);
+		expect(image.hasAttribute('srcset')).toBe(false);
 	});
 
 	it('CDN не віддав кадр — показуємо оригінал, а не сіру пляму', async () => {

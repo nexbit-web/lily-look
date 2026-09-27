@@ -1,5 +1,5 @@
 ﻿import { describe, expect, it } from 'vitest';
-import { discountPercent, formatPrice } from '$lib/money';
+import { discountPercent, formatPrice, priceAmount } from '$lib/money';
 
 /**
  * Гроші — цілі копійки. Головне, що тут перевіряється: жодних плаваючих
@@ -41,5 +41,13 @@ describe('discountPercent', () => {
 		expect(discountPercent(100000, 100000)).toBeNull();
 		expect(discountPercent(100000, 90000)).toBeNull();
 		expect(discountPercent(100000, 0)).toBeNull();
+	});
+});
+
+describe('priceAmount', () => {
+	it('ціна для Schema.org і Merchant Center: крапка й рівно дві цифри копійок', () => {
+		expect(priceAmount(264900)).toBe('2649.00');
+		expect(priceAmount(105)).toBe('1.05');
+		expect(priceAmount(0)).toBe('0.00');
 	});
 });

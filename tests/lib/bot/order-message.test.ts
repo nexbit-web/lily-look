@@ -35,8 +35,8 @@ const order = (patch: Partial<OrderMessage> = {}): OrderMessage => ({
 	comment: '',
 	lines: [line()],
 	subtotal: 264_900,
-	deliveryCost: 9800,
-	total: 274_700,
+	deliveryCost: 0,
+	total: 264_900,
 	payment: 'Оплата при отриманні',
 	// Час фіксований, щоб перевіряти формат, а не годинник машини.
 	now: new Date('2026-09-17T12:42:00Z'),
@@ -148,8 +148,8 @@ describe('що має бути в наряді', () => {
 		const message = plain(text());
 
 		expect(message).toContain('Товари · 2 649 грн');
-		expect(message).toContain('Доставка · 98 грн');
-		expect(message).toContain('Разом · 2 747 грн');
+		expect(message).toContain('Доставка · за тарифом перевізника, платить отримувач');
+		expect(message).toContain('Разом · 2 649 грн');
 		expect(message).toContain('Оплата при отриманні');
 	});
 
@@ -163,8 +163,22 @@ describe('що має бути в наряді', () => {
 		expect(message).not.toContain('<b>Товари');
 	});
 
-	it('безкоштовну доставку називаємо словом, а не нулем', () => {
-		expect(plain(text({ deliveryCost: 0 }))).toContain('Доставка · безкоштовно');
+	/** Менеджеру це вказівка для накладної: хто платник доставки. */
+	it('від порогу доставка безкоштовна — і видно, що платить магазин', () => {
+		expect(plain(text({ subtotal: 450_000, total: 450_000 }))).toContain(
+			'Доставка · безкоштовно, платить магазин'
+		);
+	});
+
+	it('самовивіз — просто безкоштовно, платити нікому', () => {
+		const message = plain(text({ method: 'PICKUP' }));
+
+		expect(message).toContain('Доставка · безкоштовно');
+		expect(message).not.toContain('платить');
+	});
+
+	it('старе замовлення з сумою доставки показує ту суму, яку бачив покупець', () => {
+		expect(plain(text({ deliveryCost: 9800, total: 274_700 }))).toContain('Доставка · 98 грн');
 	});
 
 	it('посилання на замовлення, якщо воно відоме', () => {

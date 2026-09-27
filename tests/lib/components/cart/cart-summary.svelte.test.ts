@@ -17,7 +17,7 @@ describe('підсумок кошика', () => {
 		render(CartSummary, { subtotal: FREE_DELIVERY_FROM - 70_000, count: 1 });
 
 		expect(screen.getByText(/Ще .* безкоштовна/)).toBeInTheDocument();
-		expect(screen.getByText('Розрахуємо далі')).toBeInTheDocument();
+		expect(screen.getByText('За тарифом перевізника')).toBeInTheDocument();
 		expect(document.querySelector('[data-slot="progress"]')).toBeInTheDocument();
 	});
 

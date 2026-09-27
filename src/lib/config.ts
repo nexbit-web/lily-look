@@ -31,17 +31,6 @@ export const SIZE_ORDER = ['XS', 'S', 'M', 'L', 'XL', 'XXL'] as const;
 export const PRODUCTS_PER_PAGE = 12;
 
 /**
- * Головна сторінка.
- *
- * `HOME_BLOCK_SIZE` — рівно один ряд карток на десктопі в блоках «Знижки»
- * і «Новинки». `HOME_CATEGORY_LIMIT` — скільки речей показує стрічка однієї
- * категорії; решта лишається за посиланням «Уся категорія», інакше головна
- * перетворилась би на весь каталог одним полотном.
- * `HOME_EAGER_SECTIONS` — скільки стрічок категорій віддає сервер одразу
- * в HTML (їх видно майже без прокрутки й вони мають бути в індексі);
- * усі наступні довантажуються, коли покупець до них догортає.
- */
-/**
  * Скільки живе відповідь каталогу в пам'яті сервера. Каталог веде CRM, і
  * правки доїжджають на сайт за цю хвилину; сторінка товару не кешується
  * взагалі — там вирішує залишок на складі.
@@ -55,8 +44,18 @@ export const CATALOG_CACHE_MS = 60_000;
 export const SEARCH_MIN_LENGTH = 2;
 export const SEARCH_SUGGESTIONS = 6;
 
+/**
+ * Головна сторінка.
+ *
+ * `HOME_BLOCK_SIZE` — рівно один ряд карток на десктопі в блоках «Знижки»
+ * і «Новинки». Стрічка категорії показує категорію цілком, без обрізання й
+ * кнопки «ще»: фото в ній вантажаться ліниво, тож довга стрічка не гальмує
+ * відкриття головної.
+ * `HOME_EAGER_SECTIONS` — скільки стрічок категорій віддає сервер одразу
+ * в HTML (їх видно майже без прокрутки й вони мають бути в індексі);
+ * усі наступні довантажуються, коли покупець до них догортає.
+ */
 export const HOME_BLOCK_SIZE = 4;
-export const HOME_CATEGORY_LIMIT = 8;
 export const HOME_EAGER_SECTIONS = 2;
 
 /**
@@ -118,6 +117,8 @@ export type SortOption = (typeof SORT_OPTIONS)[number]['value'];
  * `kind` визначає, які поля показати: відділення зі списку, вулицю вручну
  * чи нічого (самовивіз). `days` — [мінімум, максимум] днів у дорозі після
  * відправки; з них сторінка товару рахує конкретну дату отримання.
+ *
+ * Ціни доставки тут немає свідомо: див. `isDeliveryFree`.
  */
 export const DELIVERY_METHODS = [
 	{
@@ -125,7 +126,6 @@ export const DELIVERY_METHODS = [
 		days: [1, 3] as readonly [number, number],
 		label: 'Нова Пошта — відділення',
 		hint: 'Доставка 1–3 дні',
-		cost: 9000,
 		carrier: 'nova-poshta',
 		kind: 'branch'
 	},
@@ -134,7 +134,6 @@ export const DELIVERY_METHODS = [
 		days: [1, 3] as readonly [number, number],
 		label: 'Нова Пошта — кур’єр',
 		hint: 'Доставка за адресою, 1–3 дні',
-		cost: 14000,
 		carrier: 'nova-poshta',
 		kind: 'courier'
 	},
@@ -144,7 +143,6 @@ export const DELIVERY_METHODS = [
 		days: [2, 5] as readonly [number, number],
 		label: 'Укрпошта — відділення',
 		hint: 'Доставка 2–5 днів, дешевше',
-		cost: 6000,
 		carrier: null,
 		kind: 'branch'
 	},
@@ -153,7 +151,6 @@ export const DELIVERY_METHODS = [
 		days: [0, 0] as readonly [number, number],
 		label: 'Самовивіз із шоуруму',
 		hint: SENDER.pickupAddress,
-		cost: 0,
 		carrier: null,
 		kind: 'pickup'
 	}
@@ -165,10 +162,19 @@ export function deliveryMethod(value: DeliveryMethodValue) {
 	return DELIVERY_METHODS.find((method) => method.value === value) ?? DELIVERY_METHODS[0];
 }
 
-/** Вартість доставки з урахуванням порогу безкоштовної. */
-export function deliveryCostFor(value: DeliveryMethodValue, subtotal: number): number {
-	if (subtotal >= FREE_DELIVERY_FROM) return 0;
-	return deliveryMethod(value).cost;
+/**
+ * Чи безкоштовна доставка для покупця.
+ *
+ * Самовивіз — завжди, а від порогу — будь-яким способом: перевізнику тоді
+ * платить магазин. В інших випадках покупець платить перевізнику сам, на
+ * пошті, за його тарифом — і сайт суми не називає. Точно її не знає ніхто,
+ * крім перевізника: тариф залежить від ваги й оголошеної вартості, а з
+ * оплатою при отриманні Нова Пошта ще бере комісію за переказ грошей
+ * (близько 20 грн + 2 %). Колись тут стояли «90 грн», а на пошті покупець
+ * платив півтори сотні — обіцянка, за яку потім претензії до магазину.
+ */
+export function isDeliveryFree(value: DeliveryMethodValue, subtotal: number): boolean {
+	return deliveryMethod(value).kind === 'pickup' || subtotal >= FREE_DELIVERY_FROM;
 }
 
 export const ORDER_STATUS_LABELS = {

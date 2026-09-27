@@ -10,6 +10,7 @@ import {
 import { searchProductIds } from '$lib/server/search';
 import {
 	breadcrumbsNode,
+	catalogDescription,
 	categoryDescription,
 	categoryHeading,
 	categoryIntro,
@@ -23,6 +24,18 @@ const SORT_VALUES = SORT_OPTIONS.map((option) => option.value) as readonly strin
 
 function parseSort(value: string | null): SortOption {
 	return SORT_VALUES.includes(value ?? '') ? (value as SortOption) : 'new';
+}
+
+/**
+ * Номер сторінки з адреси — лише ціле додатне число.
+ *
+ * `?page=1.3` дав би базі дробовий `skip`, і замість сторінки покупець
+ * побачив би збій сервера; `?page=-2` чи `?page=abc` — ще одна адреса
+ * першої сторінки. Усе, що не схоже на номер, — перша сторінка: канонічна
+ * адреса в неї без `page`, тож дублів у видачі не буде.
+ */
+function parsePage(value: string | null): number {
+	return value !== null && /^[1-9]\d{0,4}$/.test(value) ? Number(value) : 1;
 }
 
 type SeoInput = {
@@ -41,10 +54,13 @@ type SeoInput = {
  * Заголовок, опис і канонічний адрес списку товарів.
  *
  * Два правила, без яких сайт з'їдає сам себе у видачі:
- * 1. Сторінки з фільтрами (розмір, колір, сортування) не індексуються —
- *    інакше в Google потрапляють тисячі майже однакових адрес.
+ * 1. Сторінки з фільтрами (розмір, колір) не індексуються — інакше в
+ *    Google потрапляють тисячі майже однакових адрес.
  * 2. Канонічний адрес лишає тільки те, що змінює зміст: категорію,
- *    розпродаж і номер сторінки. Решта параметрів відкидається.
+ *    розпродаж і номер сторінки. Решта параметрів відкидається. Тому
+ *    сортування noindex не отримує: той самий товар в іншому порядку
+ *    canonical і так склеює з чистою категорією, а noindex поруч із
+ *    canonical — суперечливий сигнал для Google.
  */
 function buildSeo(input: SeoInput) {
 	const { category, query, sale, page, total, pathname, sizes, colors, range } = input;
@@ -108,7 +124,7 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 	const query = url.searchParams.get('q')?.trim() ?? '';
 	const sale = url.searchParams.get('sale') === '1';
 	const sort = parseSort(url.searchParams.get('sort'));
-	const page = Number(url.searchParams.get('page')) || 1;
+	const page = parsePage(url.searchParams.get('page'));
 
 	// Гола /catalog — це вітрина категорій, а не звалище всіх товарів.
 	// Пошук, розпродаж і фільтри лишаються звичайним списком.
@@ -129,7 +145,7 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 				title: `Каталог жіночого одягу — ${SITE.name}`,
 				// Список — з того, що реально є в каталозі. Опис з «блузами й трикотажем»,
 				// яких у магазині немає, ІІ-асистент переказав би покупцеві як факт.
-				description: `Категорії жіночого одягу ${SITE.name}: ${categories.map((item) => item.name.toLowerCase()).join(', ')}. Доставка Новою Поштою по Україні, обмін ${RETURN_DAYS} ${plural(RETURN_DAYS, 'день', 'дні', 'днів')}.`,
+				description: catalogDescription(categories.map((item) => item.name)),
 				canonical: '/catalog',
 				index: true
 			}
@@ -146,6 +162,10 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 		listFacets(categorySlug),
 		categorySlug ? categoryPriceRange(categorySlug) : null
 	]);
+
+	// Сторінка за межами списку (товар розібрали, а посилання лишилось) —
+	// порожня сторінка з кодом 200 для Google «м’яка 404». Кажемо чесно.
+	if (page > result.pageCount) error(404, 'Такої сторінки в каталозі немає');
 
 	locals.jsonLd = [
 		breadcrumbsNode(url.origin, [

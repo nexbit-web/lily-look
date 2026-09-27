@@ -310,10 +310,10 @@ export async function listNewArrivals(limit = 4): Promise<ProductCard[]> {
  * Товари однієї категорії — стрічка на головній.
  *
  * Порядок той самий, що й у каталозі за замовчуванням (спершу свіже), тож
- * покупець бачить на головній початок тієї ж полиці, на яку веде посилання
- * «Уся категорія».
+ * покупець бачить на головній ту саму полицю, на яку веде посилання
+ * «Уся категорія». Без `limit` — уся категорія.
  */
-export async function listCategoryProducts(slug: string, limit: number): Promise<ProductCard[]> {
+export async function listCategoryProducts(slug: string, limit?: number): Promise<ProductCard[]> {
 	const rows = await db.product.findMany({
 		where: { ...VISIBLE_PRODUCT, category: { slug } },
 		select: CARD_SELECT,

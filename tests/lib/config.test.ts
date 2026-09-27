@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
 	DELIVERY_METHODS,
-	deliveryCostFor,
 	deliveryMethod,
 	FREE_DELIVERY_FROM,
+	isDeliveryFree,
 	SENDER
 } from '$lib/config';
 
@@ -24,18 +24,24 @@ describe('способи доставки', () => {
 	});
 });
 
-describe('deliveryCostFor', () => {
-	it('нижче порогу бере тариф способу доставки', () => {
-		expect(deliveryCostFor('NOVA_POSHTA_BRANCH', FREE_DELIVERY_FROM - 1)).toBe(9000);
+describe('isDeliveryFree', () => {
+	it('нижче порогу доставку платить покупець перевізнику', () => {
+		expect(isDeliveryFree('NOVA_POSHTA_BRANCH', FREE_DELIVERY_FROM - 1)).toBe(false);
+		expect(isDeliveryFree('UKRPOSHTA_BRANCH', 0)).toBe(false);
 	});
 
-	it('від порогу — безкоштовно', () => {
-		expect(deliveryCostFor('NOVA_POSHTA_BRANCH', FREE_DELIVERY_FROM)).toBe(0);
-		expect(deliveryCostFor('NOVA_POSHTA_COURIER', FREE_DELIVERY_FROM + 1)).toBe(0);
+	it('від порогу — безкоштовно будь-яким способом', () => {
+		expect(isDeliveryFree('NOVA_POSHTA_BRANCH', FREE_DELIVERY_FROM)).toBe(true);
+		expect(isDeliveryFree('NOVA_POSHTA_COURIER', FREE_DELIVERY_FROM + 1)).toBe(true);
 	});
 
 	it('самовивіз безкоштовний завжди', () => {
-		expect(deliveryCostFor('PICKUP', 0)).toBe(0);
+		expect(isDeliveryFree('PICKUP', 0)).toBe(true);
+	});
+
+	/** Фіксована «90 грн» обіцяла покупцеві суму, якої на пошті не було. */
+	it('жоден спосіб доставки не несе вигаданої ціни', () => {
+		for (const method of DELIVERY_METHODS) expect(method).not.toHaveProperty('cost');
 	});
 });
 

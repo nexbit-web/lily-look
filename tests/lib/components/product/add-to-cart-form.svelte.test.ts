@@ -177,7 +177,6 @@ describe('форма купівлі', () => {
 				{
 					value: 'NOVA_POSHTA_BRANCH',
 					label: 'Нова Пошта — відділення',
-					cost: 9000,
 					shipsToday: true,
 					eta: '10–12 вересня'
 				}

@@ -3,7 +3,6 @@ import type { DeliveryMethodValue } from '$lib/config';
 import type { CheckoutInput } from '$lib/schemas';
 import { clearCart, readCart } from './cart.js';
 import { db } from './db.js';
-import { resolveDeliveryCost } from './delivery-cost.js';
 import { DEFAULT_PAYMENT_PROVIDER, getPaymentProvider } from './payments.js';
 import { dispatchOrder } from './bot/orders.js';
 
@@ -45,14 +44,11 @@ export async function createOrder(
 
 	const deliveryMethod = input.deliveryMethod as DeliveryMethodValue;
 	const subtotal = cart.subtotal;
-	// Той самий розрахунок, що бачив покупець у підсумку: реальний тариф НП,
-	// а якщо API недоступне — фіксована ставка з config.
-	const deliveryCost = await resolveDeliveryCost({
-		method: deliveryMethod,
-		subtotal,
-		itemCount: cart.count,
-		cityRef: input.deliveryCityRef
-	});
+	// Доставку покупець платить перевізнику сам, на пошті, або її оплачує
+	// магазин — у суму замовлення вона не входить ні в тому, ні в іншому разі.
+	// Нуль тут — не «безкоштовно»: хто платить, видно зі способу й суми
+	// (`isDeliveryFree`), а картка замовлення так і пише.
+	const deliveryCost = 0;
 
 	let created: { id: string; number: string };
 

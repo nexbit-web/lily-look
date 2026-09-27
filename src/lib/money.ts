@@ -15,6 +15,14 @@ export function formatPrice(kopiyky: number): string {
 	return `${formatter.format(kopiyky / 100)}\u00a0грн`;
 }
 
+/**
+ * 264900 → "2649.00" — ціна для машин: Schema.org, фід Merchant Center,
+ * Open Graph. Крапка й рівно дві цифри копійок, без пробілів і валюти.
+ */
+export function priceAmount(kopiyky: number): string {
+	return (kopiyky / 100).toFixed(2);
+}
+
 /** Знижка у відсотках, або null якщо старої ціни немає. */
 export function discountPercent(price: number, compareAt: number | null): number | null {
 	if (!compareAt || compareAt <= price) return null;

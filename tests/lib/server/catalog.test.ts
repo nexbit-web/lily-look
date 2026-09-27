@@ -362,6 +362,16 @@ describe('стрічка категорії на головній', () => {
 	});
 });
 
+describe('стрічка категорії без ліміту', () => {
+	it('без ліміту бере категорію цілком', async () => {
+		db.product.findMany.mockResolvedValue([row()]);
+
+		await listCategoryProducts('sukni');
+
+		expect(db.product.findMany.mock.calls[0][0].take).toBeUndefined();
+	});
+});
+
 describe('колекція', () => {
 	it('полиці йдуть у порядку колекції, а не бази', async () => {
 		db.category.findMany.mockResolvedValue([

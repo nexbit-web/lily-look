@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import HeroSlider, { type Banner } from '$lib/components/home/hero-slider.svelte';
 
 /**
@@ -105,6 +105,96 @@ describe('свайп на телефоні', () => {
 		// Тап із ледь помітним зсувом — це клік по банеру.
 		swipe(-10);
 		await Promise.resolve();
+
+		expect(visible()).toEqual(['Осіння колекція']);
+	});
+});
+
+/**
+ * Автопрогортання. Скарга з продакшену: «смуга внизу дійшла до кінця, а
+ * банер завмер і далі не перемикається». Причина була в двох годинниках —
+ * смужці (CSS) і таймері, які на паузі поводились по-різному. Тепер слайд
+ * перемикає кінець анімації смужки, а таймер лише страхує.
+ */
+describe('автопрогортання', () => {
+	const INTERVAL = 4500;
+
+	/** Смужка активного банера — та, чия анімація й перемикає слайд. */
+	const progress = () => document.querySelector<HTMLElement>('[data-progress]');
+	const carousel = () => screen.getByRole('region', { name: 'Акції та новинки' });
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it('смужка добігла кінця — одразу наступний банер', async () => {
+		render(HeroSlider, { banners, interval: INTERVAL });
+		firstImageLoaded();
+
+		await fireEvent.animationEnd(progress()!);
+
+		expect(visible()).toEqual(['Демісезонні куртки']);
+	});
+
+	it('після паузи мишею банер перемикається разом зі смужкою, а не через новий повний відлік', async () => {
+		vi.useFakeTimers();
+		render(HeroSlider, { banners, interval: INTERVAL });
+		firstImageLoaded();
+
+		await fireEvent.pointerEnter(carousel(), { pointerType: 'mouse' });
+		expect(progress()?.style.animationPlayState).toBe('paused');
+		// Курсор затримався над банером — нічого не перемикається.
+		await vi.advanceTimersByTimeAsync(INTERVAL * 3);
+		expect(visible()).toEqual(['Осіння колекція']);
+
+		await fireEvent.pointerLeave(carousel(), { pointerType: 'mouse' });
+		expect(progress()?.style.animationPlayState).toBe('running');
+		// Смужка дограла залишок — банер перемикається тієї ж миті.
+		await fireEvent.animationEnd(progress()!);
+
+		expect(visible()).toEqual(['Демісезонні куртки']);
+	});
+
+	it('дотик пальцем паузу не вмикає — на телефоні mouseleave не приходить ніколи', async () => {
+		render(HeroSlider, { banners, interval: INTERVAL });
+		firstImageLoaded();
+
+		await fireEvent.pointerEnter(carousel(), { pointerType: 'touch' });
+
+		expect(progress()?.style.animationPlayState).toBe('running');
+	});
+
+	it('анімація так і не закінчилась — страховка все одно перемикає банер', async () => {
+		vi.useFakeTimers();
+		render(HeroSlider, { banners, interval: INTERVAL });
+		firstImageLoaded();
+
+		await vi.advanceTimersByTimeAsync(INTERVAL);
+		// Звичайний час показу страховка не чіпає — першою має встигнути смужка.
+		expect(visible()).toEqual(['Осіння колекція']);
+
+		await vi.advanceTimersByTimeAsync(INTERVAL);
+		expect(visible()).toEqual(['Демісезонні куртки']);
+	});
+
+	it('на паузі не перемикає й страховка', async () => {
+		vi.useFakeTimers();
+		render(HeroSlider, { banners, interval: INTERVAL });
+		firstImageLoaded();
+
+		await fireEvent.pointerEnter(carousel(), { pointerType: 'mouse' });
+		await vi.advanceTimersByTimeAsync(INTERVAL * 5);
+
+		expect(visible()).toEqual(['Осіння колекція']);
+	});
+
+	it('банери йдуть по колу й не застрягають на останньому', async () => {
+		render(HeroSlider, { banners, interval: INTERVAL });
+		firstImageLoaded();
+
+		for (let step = 0; step < banners.length; step += 1) {
+			await fireEvent.animationEnd(progress()!);
+		}
 
 		expect(visible()).toEqual(['Осіння колекція']);
 	});
