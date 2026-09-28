@@ -10,7 +10,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const addToCart = vi.fn();
 
+const track = vi.fn();
+const visitor = { id: 'abc123def456ghi789jk', source: 'facebook', device: 'mobile' };
+
 vi.mock('$lib/server/cart', () => ({ addToCart }));
+vi.mock('$lib/server/analytics', () => ({ identify: () => visitor, track }));
 vi.mock('$lib/server/catalog', () => ({ getProduct: vi.fn(), listRecommended: vi.fn() }));
 
 const { actions } = await import('$routes/product/[slug]/+page.server');
@@ -22,7 +26,8 @@ function event(fields: Record<string, string>) {
 			headers: { 'content-type': 'application/x-www-form-urlencoded' },
 			body: new URLSearchParams(fields)
 		}),
-		cookies: {} as RequestEvent['cookies']
+		cookies: {} as RequestEvent['cookies'],
+		url: new URL('http://localhost/product/suknia-olivia?/add')
 	} as RequestEvent;
 }
 
@@ -31,6 +36,7 @@ const add = (fields: Record<string, string>) =>
 	(actions.add as any)(event(fields));
 
 beforeEach(() => {
+	track.mockReset();
 	addToCart.mockResolvedValue({ ok: true, cart: { lines: [], subtotal: 0, count: 0 } });
 });
 
@@ -76,5 +82,19 @@ describe('action add', () => {
 			status: 400,
 			data: { message: 'Доступно лише 2 шт. цього розміру.' }
 		});
+	});
+});
+
+describe('відвідуваність', () => {
+	it('поклав у кошик — крок воронки записаний на цю сторінку', async () => {
+		await add({ variantId: 'v-1' });
+
+		expect(track).toHaveBeenCalledWith(visitor, 'add_to_cart', '/product/suknia-olivia');
+	});
+
+	it('не вийшло (немає розміру) — нічого не записується', async () => {
+		await add({ quantity: '1' });
+
+		expect(track).not.toHaveBeenCalled();
 	});
 });

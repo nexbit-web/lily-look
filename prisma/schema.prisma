@@ -479,3 +479,29 @@ model BotUpdate {
 
   @@index([createdAt])
 }
+
+/// Відвідуваність сайту: одна подія — один перегляд сторінки чи дія.
+///
+/// Пише тільки сайт (`src/lib/server/analytics.ts`), пачками раз на 30 с;
+/// CRM лише читає й будує звіти. Нічого особистого тут немає: ні IP, ні
+/// імені — лише випадкова мітка браузера з куки `lily_vid`. Боти й
+/// пристрої команди (кука `lily_staff`) сюди не потрапляють.
+model PageEvent {
+  id        BigInt   @id @default(autoincrement())
+  /// Випадкова мітка браузера. Та сама мітка в різні дні — та сама людина.
+  visitorId String
+  /// `view` — перегляд сторінки, `add_to_cart` — поклав у кошик, `order` — оформив.
+  type      String
+  /// Що за сторінка: home, catalog, collection, product, cart, checkout, order, info, other.
+  page      String
+  /// Адреса без параметрів: `/product/palto-rozheve`.
+  path      String
+  /// Звідки прийшов: facebook, instagram, google, direct, other.
+  source    String
+  /// mobile або desktop.
+  device    String
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([visitorId, createdAt])
+}

@@ -129,7 +129,7 @@ static/    иконки, манифест, баннеры главной — о�
 
 ## Витрина и CRM: контракт через базу
 
-Сайт — только витрина. Товары, категории, остатки и скидки ведёт внешняя CRM, подключённая к той же базе. Сайт из каталожных таблиц **только читает**; пишет он лишь в `Cart`, `CartItem`, `Order`, `OrderItem`.
+Сайт — только витрина. Товары, категории, остатки и скидки ведёт внешняя CRM, подключённая к той же базе. Сайт из каталожных таблиц **только читает**; пишет он лишь в `Cart`, `CartItem`, `Order`, `OrderItem` и в статистику посещений `PageEvent` (см. «Посещаемость»).
 
 ### Что пишет CRM
 
@@ -364,6 +364,120 @@ f_auto,q_auto,c_limit,w_400              8 998 байт
 - В боте менеджер видит, кто платит перевозчику: «безкоштовно, платить магазин» (в накладной плательщик — отправитель) или «за тарифом перевізника, платить отримувач».
 - Старые заказы с суммой доставки показывают ту сумму, которую видел покупатель.
 - Порог бесплатной доставки берётся текущий: поменяли порог — карточки открытых заказов покажут новое правило. Порог лучше не менять посреди незакрытых заказов.
+
+## Посещаемость
+
+Сайт сам считает, сколько людей зашло, откуда и на каком шаге они ушли. Данные лежат в таблице `PageEvent`: пишет только сайт (`src/lib/server/analytics.ts`), CRM только читает и строит отчёты.
+
+**На скорость сайта не влияет.** Покупателю не грузится ни одного скрипта:
+
+- первый заход (страница открылась целиком) считает сервер в `hooks.server.ts`, пока и так отдаёт страницу;
+- переходы внутри сайта присылает `navigator.sendBeacon('/api/view')` из `+layout.svelte` — браузер шлёт его в фоне, уже после показа страницы. Запросы `__data.json` для этого не годятся: сайт шлёт их и тогда, когда на карточку просто навели курсор (`data-sveltekit-preload-data="hover"`);
+- в базу ничего не пишется на каждый заход: событие ложится в память, и раз в 30 секунд всё накопленное уходит одним `createMany`. Никто этого не ждёт; база недоступна — теряются только эти 30 секунд статистики. Перед остановкой сервера (`sveltekit:shutdown`) накопленное дописывается.
+
+**Кто есть кто.** Кука `lily_vid` со случайной меткой, 400 дней. Ни IP, ни имени. Кто почистил куки или зашёл с другого устройства — посчитается новым человеком, как и в любом счётчике.
+
+**Что не считается:**
+
+- боты, превью ссылок, headless Chrome, Lighthouse — по User-Agent;
+- устройства команды: один раз открыть на каждом телефоне и компьютере **https://lilylook.store/?ne-rahuvaty=komanda-lily-7q2** (ключ — `ANALYTICS_OPT_OUT` в `config.ts`). Ставит куку `lily_staff`, и этот браузер больше не считается;
+- `npm run dev` и запуск на `localhost` — они пишут в ту же базу, что и живой сайт.
+
+**Источник** (`source`) — откуда человек пришёл последний раз, помнится 30 дней (кука `lily_src`): зашёл по рекламе, а заказал через неделю напрямую — заказ всё равно на рекламе.
+
+| Значение    | Как определяется                                                                        |
+| ----------- | --------------------------------------------------------------------------------------- |
+| `facebook`  | `fbclid` в ссылке (его добавляет реклама Meta), `utm_source=fb`, переход с facebook.com |
+| `instagram` | `fbclid` при переходе из instagram.com, `utm_source=ig`, переход с instagram.com        |
+| `google`    | `gclid`, `utm_source=google`, поиск Google                                              |
+| `other`     | любой другой сайт или своя метка `utm_source`                                           |
+| `direct`    | ничего из этого: адрес набрали руками, закладка                                         |
+
+### Таблица `PageEvent`
+
+| Поле        | Что там                                                                                  |
+| ----------- | ---------------------------------------------------------------------------------------- |
+| `visitorId` | метка браузера; одна и та же в разные дни — один и тот же человек                        |
+| `type`      | `view` — просмотр страницы, `add_to_cart` — положил в корзину, `order` — оформил заказ   |
+| `page`      | `home`, `catalog`, `collection`, `product`, `cart`, `checkout`, `order`, `info`, `other` |
+| `path`      | адрес без параметров: `/product/palto-rozheve`                                           |
+| `source`    | `facebook`, `instagram`, `google`, `direct`, `other`                                     |
+| `device`    | `mobile` или `desktop`                                                                   |
+| `createdAt` | время события **в UTC** — для дней по Киеву переводите, как в запросах ниже              |
+
+### Запросы для CRM
+
+Уникальные посетители и просмотры по дням:
+
+```sql
+SELECT ("createdAt" AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Kyiv')::date AS day,
+       count(DISTINCT "visitorId")          AS visitors,
+       count(*) FILTER (WHERE type = 'view') AS views
+FROM "PageEvent"
+GROUP BY 1
+ORDER BY 1 DESC;
+```
+
+Посетители по источникам за сегодня:
+
+```sql
+SELECT source, count(DISTINCT "visitorId") AS visitors
+FROM "PageEvent"
+WHERE ("createdAt" AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Kyiv')::date
+      = (now() AT TIME ZONE 'Europe/Kyiv')::date
+GROUP BY source
+ORDER BY visitors DESC;
+```
+
+Воронка за 7 дней — сколько людей дошло до каждого шага, по источникам. Главный отчёт: показывает, где уходят.
+
+```sql
+SELECT source,
+       count(DISTINCT "visitorId")                                                    AS visitors,
+       count(DISTINCT "visitorId") FILTER (WHERE type = 'view' AND page = 'product')  AS viewed_product,
+       count(DISTINCT "visitorId") FILTER (WHERE type = 'add_to_cart')                AS added_to_cart,
+       count(DISTINCT "visitorId") FILTER (WHERE type = 'view' AND page = 'checkout') AS opened_checkout,
+       count(DISTINCT "visitorId") FILTER (WHERE type = 'order')                      AS ordered
+FROM "PageEvent"
+WHERE "createdAt" >= now() - interval '7 days'
+GROUP BY source
+ORDER BY visitors DESC;
+```
+
+Товары: сколько людей смотрели и сколько положили в корзину:
+
+```sql
+SELECT path,
+       count(DISTINCT "visitorId") FILTER (WHERE type = 'view')        AS viewed,
+       count(DISTINCT "visitorId") FILTER (WHERE type = 'add_to_cart') AS added_to_cart
+FROM "PageEvent"
+WHERE page = 'product' AND "createdAt" >= now() - interval '7 days'
+GROUP BY path
+ORDER BY viewed DESC
+LIMIT 20;
+```
+
+На какой странице люди уходят (последняя страница визита, без тех, кто заказал):
+
+```sql
+SELECT page, count(*) AS left_here
+FROM (
+  SELECT DISTINCT ON ("visitorId") "visitorId", page
+  FROM "PageEvent"
+  WHERE type = 'view' AND "createdAt" >= now() - interval '7 days'
+  ORDER BY "visitorId", "createdAt" DESC
+) last
+WHERE "visitorId" NOT IN (
+  SELECT "visitorId" FROM "PageEvent"
+  WHERE type = 'order' AND "createdAt" >= now() - interval '7 days'
+)
+GROUP BY page
+ORDER BY left_here DESC;
+```
+
+**Сравнение с Facebook.** В Ads Manager сравнивайте `visitors` с источником `facebook` не с «Кликами», а с «Просмотрами целевой страницы»: клики включают тех, кто нажал случайно или закрыл до загрузки. Один в один цифры не совпадут — у Facebook своя модель подсчёта, — но порядок должен быть тот же.
+
+Строк в таблице — примерно по одной на просмотр; даже при тысячах посетителей в день это годы без чистки. Если понадобится: `DELETE FROM "PageEvent" WHERE "createdAt" < now() - interval '1 year';`.
 
 ## Телеграм-бот: управление заказами
 

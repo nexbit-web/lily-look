@@ -1,4 +1,5 @@
 import { checkoutSchema, fieldErrors, validateDelivery } from '$lib/schemas';
+import { identify, track } from '$lib/server/analytics';
 import { countCartItems, readCart } from '$lib/server/cart';
 import { isNovaPoshtaConfigured } from '$lib/server/nova-poshta';
 import { createOrder } from '$lib/server/orders';
@@ -18,7 +19,8 @@ export const load: PageServerLoad = async ({ cookies }) => {
 };
 
 export const actions: Actions = {
-	default: async ({ request, cookies, url }) => {
+	default: async (event) => {
+		const { request, cookies, url } = event;
 		const form = await request.formData();
 		const values = Object.fromEntries(form) as Record<string, string>;
 
@@ -36,6 +38,9 @@ export const actions: Actions = {
 		if (!result.ok) {
 			return fail(400, { message: result.message, values });
 		}
+
+		const visitor = identify(event);
+		if (visitor) track(visitor, 'order', url.pathname);
 
 		// Онлайн-провайдер може повернути свою сторінку оплати;
 		// у режимі "оплата при отриманні" redirectUrl порожній.

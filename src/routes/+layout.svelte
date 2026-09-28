@@ -1,6 +1,7 @@
 <script lang="ts">
 	// Стилі nprogress не імпортуємо — фірмова смужка описана в app.css.
 	import '../app.css';
+	import { afterNavigate } from '$app/navigation';
 	import { navigating } from '$app/state';
 	import Footer from '$lib/components/layout/footer.svelte';
 	import Header from '$lib/components/layout/header.svelte';
@@ -11,6 +12,17 @@
 	let { data, children }: LayoutProps = $props();
 
 	nprogress.configure({ showSpinner: false, minimum: 0.15, speed: 400 });
+
+	/**
+	 * Відвідуваність: перехід на іншу сторінку всередині сайту. Перший показ
+	 * уже порахував сервер. `sendBeacon` браузер відправляє сам, у фоні й
+	 * уже після показу сторінки — на швидкість переходу це не впливає.
+	 * Зміна фільтра чи сортування на тій самій сторінці — не новий перегляд.
+	 */
+	afterNavigate(({ type, from, to }) => {
+		if (type === 'enter' || !to || from?.url.pathname === to.url.pathname) return;
+		navigator.sendBeacon?.('/api/view', to.url.pathname);
+	});
 
 	/**
 	 * Тости з'являються лише у відповідь на дію покупця, тож бібліотеку

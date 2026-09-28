@@ -12,7 +12,11 @@ const countCartItems = vi.fn();
 const readCart = vi.fn();
 const createOrder = vi.fn();
 
+const track = vi.fn();
+const visitor = { id: 'abc123def456ghi789jk', source: 'facebook', device: 'mobile' };
+
 vi.mock('$lib/server/cart', () => ({ countCartItems, readCart }));
+vi.mock('$lib/server/analytics', () => ({ identify: () => visitor, track }));
 vi.mock('$lib/server/orders', () => ({ createOrder }));
 vi.mock('$lib/server/nova-poshta', () => ({ isNovaPoshtaConfigured: () => true }));
 
@@ -144,5 +148,21 @@ describe('замовлення', () => {
 		expect(result.status).toBe(400);
 		expect(result.data.message).toContain('розібрали');
 		expect(result.data.values.customerName).toBe('Олена Коваль');
+	});
+});
+
+describe('відвідуваність', () => {
+	it('замовлення оформлене — останній крок воронки записаний', async () => {
+		await expect(submit(valid)).rejects.toMatchObject({ status: 303 });
+
+		expect(track).toHaveBeenCalledWith(visitor, 'order', '/checkout');
+	});
+
+	it('форму відбито чи товар розібрали — замовлення в статистиці немає', async () => {
+		await submit({ ...valid, customerPhone: '1' });
+		createOrder.mockResolvedValue({ ok: false, message: 'розібрали' });
+		await submit(valid);
+
+		expect(track).not.toHaveBeenCalled();
 	});
 });

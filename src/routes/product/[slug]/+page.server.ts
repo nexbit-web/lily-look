@@ -1,5 +1,6 @@
 import { DELIVERY_METHODS, MAX_CART_QUANTITY } from '$lib/config';
 import { deliveryWindow } from '$lib/delivery-estimate';
+import { identify, track } from '$lib/server/analytics';
 import { addToCart } from '$lib/server/cart';
 import { getProduct, listRecommended } from '$lib/server/catalog';
 import { breadcrumbsNode, productNode } from '$lib/server/seo';
@@ -38,7 +39,8 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 };
 
 export const actions: Actions = {
-	add: async ({ request, cookies }) => {
+	add: async (event) => {
+		const { request, cookies } = event;
 		const form = await request.formData();
 		const variantId = String(form.get('variantId') ?? '');
 		const raw = form.get('quantity');
@@ -60,6 +62,9 @@ export const actions: Actions = {
 		if (!result.ok) {
 			return fail(400, { message: result.message });
 		}
+
+		const visitor = identify(event);
+		if (visitor) track(visitor, 'add_to_cart', event.url.pathname);
 
 		return { added: true };
 	}

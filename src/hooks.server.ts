@@ -1,6 +1,7 @@
+import { identify, optOut, track } from '$lib/server/analytics';
 import { isDatabaseConfigured } from '$lib/server/db';
 import { serializeJsonLd, storeNode, websiteNode } from '$lib/server/seo';
-import { redirect, type Handle } from '@sveltejs/kit';
+import { redirect, type Handle, type RequestEvent } from '@sveltejs/kit';
 
 /**
  * Поки DATABASE_URL не заданий, будь-який запит веде на /setup з інструкцією.
@@ -15,6 +16,17 @@ export const handle: Handle = async ({ event, resolve }) => {
 	if (isDatabaseConfigured() && onSetupPage) {
 		redirect(307, '/');
 	}
+
+	// Секретне посилання команди: цей пристрій більше не рахується.
+	const staff = optOut(event);
+	if (staff) {
+		secure(staff, event.url);
+		return staff;
+	}
+
+	// Перший показ сторінки рахує сервер — поки й так її віддає. Кука з
+	// міткою ставиться до відповіді, тож визначаємо відвідувача заздалегідь.
+	const visitor = isPageLoad(event) ? identify(event) : null;
 
 	/**
 	 * Розмітка Schema.org вставляється тут, а не в шаблоні сторінки.
@@ -36,8 +48,31 @@ export const handle: Handle = async ({ event, resolve }) => {
 	});
 
 	secure(response, event.url);
+
+	// Лише справжня сторінка: не редирект, не 404 і не файл на кшталт robots.txt.
+	if (visitor && response.status === 200) {
+		if (response.headers.get('content-type')?.startsWith('text/html')) {
+			track(visitor, 'view', event.url.pathname);
+		}
+	}
 	return response;
 };
+
+/**
+ * Браузер відкриває сторінку цілком: перший захід, оновлення, посилання
+ * з реклами. Переходи всередині сайту йдуть інакше (`__data.json`), і їх
+ * тут не рахуємо: такий самий запит браузер шле й тоді, коли на картку
+ * просто навели курсор, — це ще не перегляд. Їх рахує `/api/view`.
+ */
+function isPageLoad(event: RequestEvent): boolean {
+	return (
+		event.request.method === 'GET' &&
+		!event.isDataRequest &&
+		event.route.id !== null &&
+		!event.url.pathname.startsWith('/api/') &&
+		(event.request.headers.get('accept') ?? '').includes('text/html')
+	);
+}
 
 /**
  * Заголовки безпеки — на кожну відповідь.
