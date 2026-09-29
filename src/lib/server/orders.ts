@@ -22,7 +22,14 @@ class OutOfStockError extends Error {
 }
 
 export type CreateOrderResult =
-	{ ok: true; number: string; redirectUrl: string | null } | { ok: false; message: string };
+	| {
+			ok: true;
+			number: string;
+			redirectUrl: string | null;
+			/** Що купили — для реклами (подія Purchase), без особистого. */
+			items: { slug: string; name: string; unitPrice: number; quantity: number }[];
+	  }
+	| { ok: false; message: string };
 
 /**
  * Оформлення замовлення.
@@ -129,7 +136,17 @@ export async function createOrder(
 
 	await clearCart(cookies);
 
-	return { ok: true, number: created.number, redirectUrl: intent.redirectUrl };
+	return {
+		ok: true,
+		number: created.number,
+		redirectUrl: intent.redirectUrl,
+		items: cart.lines.map((line) => ({
+			slug: line.productSlug,
+			name: line.productName,
+			unitPrice: line.unitPrice,
+			quantity: line.quantity
+		}))
+	};
 }
 
 export async function getOrderByNumber(number: string) {

@@ -3,6 +3,7 @@ import { deliveryWindow } from '$lib/delivery-estimate';
 import { identify, track } from '$lib/server/analytics';
 import { addToCart } from '$lib/server/cart';
 import { getProduct, listRecommended } from '$lib/server/catalog';
+import { metaAddToCart } from '$lib/server/meta';
 import { breadcrumbsNode, productNode } from '$lib/server/seo';
 import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
@@ -64,7 +65,18 @@ export const actions: Actions = {
 		}
 
 		const visitor = identify(event);
-		if (visitor) track(visitor, 'add_to_cart', event.url.pathname);
+		if (visitor) {
+			track(visitor, 'add_to_cart', event.url.pathname);
+			const line = result.cart.lines.find((item) => item.variantId === variantId);
+			if (line) {
+				metaAddToCart(event, visitor, {
+					slug: line.productSlug,
+					name: line.productName,
+					unitPrice: line.unitPrice,
+					quantity
+				});
+			}
+		}
 
 		return { added: true };
 	}

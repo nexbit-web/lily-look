@@ -138,6 +138,15 @@ describe('createOrder', () => {
 		expect(clearCart).toHaveBeenCalledWith(cookies);
 	});
 
+	it('повертає, що купили, — для реклами, без особистого', async () => {
+		const result = await createOrder(cookies, input);
+
+		expect(result).toMatchObject({
+			ok: true,
+			items: [{ slug: 'suknia-olivia', name: 'Сукня Olivia', unitPrice: 159_900, quantity: 2 }]
+		});
+	});
+
 	it('усе списання й створення — в одній транзакції', async () => {
 		await createOrder(cookies, input);
 		expect(db.$transaction).toHaveBeenCalledTimes(1);

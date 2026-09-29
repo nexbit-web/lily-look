@@ -1,5 +1,6 @@
 import { identify, optOut, track } from '$lib/server/analytics';
 import { isDatabaseConfigured } from '$lib/server/db';
+import { domainVerification, metaView, rememberAdClick } from '$lib/server/meta';
 import { serializeJsonLd, storeNode, websiteNode } from '$lib/server/seo';
 import { redirect, type Handle, type RequestEvent } from '@sveltejs/kit';
 
@@ -27,6 +28,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 	// Перший показ сторінки рахує сервер — поки й так її віддає. Кука з
 	// міткою ставиться до відповіді, тож визначаємо відвідувача заздалегідь.
 	const visitor = isPageLoad(event) ? identify(event) : null;
+	// Клік по рекламі — теж у куку, тож теж до відповіді.
+	if (visitor) rememberAdClick(event);
 
 	/**
 	 * Розмітка Schema.org вставляється тут, а не в шаблоні сторінки.
@@ -43,7 +46,9 @@ export const handle: Handle = async ({ event, resolve }) => {
 			const origin = event.url.origin;
 			const nodes = [storeNode(origin), websiteNode(origin), ...(event.locals.jsonLd ?? [])];
 
-			return html.replace('%lily.jsonld%', serializeJsonLd(nodes));
+			return html
+				.replace('%lily.jsonld%', serializeJsonLd(nodes))
+				.replace('%lily.verify%', domainVerification());
 		}
 	});
 
@@ -53,6 +58,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 	if (visitor && response.status === 200) {
 		if (response.headers.get('content-type')?.startsWith('text/html')) {
 			track(visitor, 'view', event.url.pathname);
+			metaView(event, visitor, event.url);
 		}
 	}
 	return response;

@@ -15,7 +15,10 @@ const createOrder = vi.fn();
 const track = vi.fn();
 const visitor = { id: 'abc123def456ghi789jk', source: 'facebook', device: 'mobile' };
 
+const metaPurchase = vi.fn();
+
 vi.mock('$lib/server/cart', () => ({ countCartItems, readCart }));
+vi.mock('$lib/server/meta', () => ({ metaPurchase }));
 vi.mock('$lib/server/analytics', () => ({ identify: () => visitor, track }));
 vi.mock('$lib/server/orders', () => ({ createOrder }));
 vi.mock('$lib/server/nova-poshta', () => ({ isNovaPoshtaConfigured: () => true }));
@@ -46,6 +49,8 @@ function submit(fields: Record<string, string>) {
 	return (actions.default as any)(event);
 }
 
+const items = [{ slug: 'palto', name: 'Пальто', unitPrice: 264900, quantity: 1 }];
+
 type Failure = {
 	status: number;
 	data: { errors?: Record<string, string>; message?: string; values: Record<string, string> };
@@ -53,7 +58,7 @@ type Failure = {
 
 beforeEach(() => {
 	vi.clearAllMocks();
-	createOrder.mockResolvedValue({ ok: true, number: 'LL-ABC234', redirectUrl: null });
+	createOrder.mockResolvedValue({ ok: true, number: 'LL-ABC234', redirectUrl: null, items });
 });
 
 describe('сторінка оформлення', () => {
@@ -156,6 +161,12 @@ describe('відвідуваність', () => {
 		await expect(submit(valid)).rejects.toMatchObject({ status: 303 });
 
 		expect(track).toHaveBeenCalledWith(visitor, 'order', '/checkout');
+		expect(metaPurchase).toHaveBeenCalledWith(
+			expect.anything(),
+			visitor,
+			expect.objectContaining({ number: 'LL-ABC234', items }),
+			expect.objectContaining({ customerName: 'Олена Коваль', customerPhone: '+380671234567' })
+		);
 	});
 
 	it('форму відбито чи товар розібрали — замовлення в статистиці немає', async () => {
@@ -164,5 +175,6 @@ describe('відвідуваність', () => {
 		await submit(valid);
 
 		expect(track).not.toHaveBeenCalled();
+		expect(metaPurchase).not.toHaveBeenCalled();
 	});
 });

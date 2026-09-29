@@ -13,7 +13,10 @@ const addToCart = vi.fn();
 const track = vi.fn();
 const visitor = { id: 'abc123def456ghi789jk', source: 'facebook', device: 'mobile' };
 
+const metaAddToCart = vi.fn();
+
 vi.mock('$lib/server/cart', () => ({ addToCart }));
+vi.mock('$lib/server/meta', () => ({ metaAddToCart }));
 vi.mock('$lib/server/analytics', () => ({ identify: () => visitor, track }));
 vi.mock('$lib/server/catalog', () => ({ getProduct: vi.fn(), listRecommended: vi.fn() }));
 
@@ -37,6 +40,7 @@ const add = (fields: Record<string, string>) =>
 
 beforeEach(() => {
 	track.mockReset();
+	metaAddToCart.mockReset();
 	addToCart.mockResolvedValue({ ok: true, cart: { lines: [], subtotal: 0, count: 0 } });
 });
 
@@ -96,5 +100,42 @@ describe('відвідуваність', () => {
 		await add({ quantity: '1' });
 
 		expect(track).not.toHaveBeenCalled();
+		expect(metaAddToCart).not.toHaveBeenCalled();
+	});
+
+	it('реклама Meta дізнається, що саме й за скільки поклали', async () => {
+		addToCart.mockResolvedValue({
+			ok: true,
+			cart: {
+				lines: [
+					{
+						variantId: 'v-0',
+						productSlug: 'insha',
+						productName: 'Інша',
+						unitPrice: 100,
+						quantity: 1
+					},
+					{
+						variantId: 'v-1',
+						productSlug: 'suknia-olivia',
+						productName: 'Сукня Olivia',
+						unitPrice: 189900,
+						quantity: 3
+					}
+				],
+				subtotal: 0,
+				count: 4
+			}
+		});
+
+		await add({ variantId: 'v-1', quantity: '2' });
+
+		// Кількість — саме додана зараз, а не вся, що вже лежить у кошику.
+		expect(metaAddToCart).toHaveBeenCalledWith(expect.anything(), visitor, {
+			slug: 'suknia-olivia',
+			name: 'Сукня Olivia',
+			unitPrice: 189900,
+			quantity: 2
+		});
 	});
 });

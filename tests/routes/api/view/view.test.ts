@@ -10,7 +10,10 @@ const identify = vi.fn();
 const track = vi.fn();
 const visitor = { id: 'abc123def456ghi789jk', source: 'direct', device: 'desktop' };
 
+const metaView = vi.fn();
+
 vi.mock('$lib/server/analytics', () => ({ identify, track }));
+vi.mock('$lib/server/meta', () => ({ metaView }));
 
 const { POST } = await import('$routes/api/view/+server');
 
@@ -31,6 +34,11 @@ describe('/api/view', () => {
 
 		expect(response.status).toBe(204);
 		expect(track).toHaveBeenCalledWith(visitor, 'view', '/product/palto');
+		expect(metaView).toHaveBeenCalledWith(
+			expect.anything(),
+			visitor,
+			new URL('https://lilylook.store/product/palto')
+		);
 	});
 
 	it.each([
@@ -52,5 +60,6 @@ describe('/api/view', () => {
 
 		expect(response.status).toBe(204);
 		expect(track).not.toHaveBeenCalled();
+		expect(metaView).not.toHaveBeenCalled();
 	});
 });

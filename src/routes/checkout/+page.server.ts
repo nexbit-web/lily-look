@@ -1,6 +1,7 @@
 import { checkoutSchema, fieldErrors, validateDelivery } from '$lib/schemas';
 import { identify, track } from '$lib/server/analytics';
 import { countCartItems, readCart } from '$lib/server/cart';
+import { metaPurchase } from '$lib/server/meta';
 import { isNovaPoshtaConfigured } from '$lib/server/nova-poshta';
 import { createOrder } from '$lib/server/orders';
 import { fail, redirect } from '@sveltejs/kit';
@@ -40,7 +41,10 @@ export const actions: Actions = {
 		}
 
 		const visitor = identify(event);
-		if (visitor) track(visitor, 'order', url.pathname);
+		if (visitor) {
+			track(visitor, 'order', url.pathname);
+			metaPurchase(event, visitor, result, parsed.data);
+		}
 
 		// Онлайн-провайдер може повернути свою сторінку оплати;
 		// у режимі "оплата при отриманні" redirectUrl порожній.

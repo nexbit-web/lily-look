@@ -61,6 +61,7 @@ npm run db:studio      # GUI к базе
 | Баннеры главной               | `static/banners` + `buildBanners` в `src/routes/+page.server.ts` |
 | Сезонные коллекции            | `COLLECTIONS` в `src/lib/config.ts`                              |
 | Посещаемость, воронка         | `src/lib/server/analytics.ts`, README «Посещаемость»             |
+| События для рекламы Meta      | `src/lib/server/meta.ts`, README «Реклама Meta»                  |
 | Схема БД                      | `prisma/schema.prisma`                                           |
 | Тесты                         | `tests/` (зеркало `src/`)                                        |
 | Демо-данные                   | `prisma/seed.ts`                                                 |
@@ -79,3 +80,4 @@ npm run db:studio      # GUI к базе
 - Условия магазина (доставка, оплата, возврат) формулируются только в `store-facts.ts` — их читают страницы условий и `llms.txt`. Числа при этом живут в `config.ts`.
 - Фото для чужих систем (фид, `og:image`) — через `portableImageSrc` (JPEG), не `imageSrc` (`f_auto` может отдать AVIF, который Merchant Center не принимает).
 - **Посещаемость не должна тормозить сайт.** Событие только кладётся в память (`track`), в базу уходит пачкой раз в 30 с. Не делай `await` записи статистики в запросе и не считай просмотром `__data.json` — его шлёт предзагрузка при наведении курсора.
+- **Реклама Meta — только с сервера** (`meta.ts`, Conversions API), без пикселя в браузере. Те же правила, что у посещаемости: в память и пачкой в фоне, без `await`. Личное (телефон, имя, город) уходит только хешем SHA-256.

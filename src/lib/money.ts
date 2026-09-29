@@ -23,6 +23,11 @@ export function priceAmount(kopiyky: number): string {
 	return (kopiyky / 100).toFixed(2);
 }
 
+/** 264900 → 2649 — ціна числом для API, що чекають саме число (Meta Conversions API). */
+export function priceValue(kopiyky: number): number {
+	return kopiyky / 100;
+}
+
 /** Знижка у відсотках, або null якщо старої ціни немає. */
 export function discountPercent(price: number, compareAt: number | null): number | null {
 	if (!compareAt || compareAt <= price) return null;

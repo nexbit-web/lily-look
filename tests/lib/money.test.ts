@@ -1,5 +1,5 @@
 ﻿import { describe, expect, it } from 'vitest';
-import { discountPercent, formatPrice, priceAmount } from '$lib/money';
+import { discountPercent, formatPrice, priceAmount, priceValue } from '$lib/money';
 
 /**
  * Гроші — цілі копійки. Головне, що тут перевіряється: жодних плаваючих
@@ -49,5 +49,13 @@ describe('priceAmount', () => {
 		expect(priceAmount(264900)).toBe('2649.00');
 		expect(priceAmount(105)).toBe('1.05');
 		expect(priceAmount(0)).toBe('0.00');
+	});
+});
+
+describe('priceValue', () => {
+	it('ціна числом для Meta: гривні з копійками, без округлення', () => {
+		expect(priceValue(264900)).toBe(2649);
+		expect(priceValue(105)).toBe(1.05);
+		expect(priceValue(0)).toBe(0);
 	});
 });

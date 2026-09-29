@@ -1,4 +1,5 @@
 import { identify, track } from '$lib/server/analytics';
+import { metaView } from '$lib/server/meta';
 import type { RequestHandler } from './$types';
 
 /**
@@ -12,7 +13,11 @@ export const POST: RequestHandler = async (event) => {
 	if (!/^\/\S{0,199}$/.test(path)) return new Response(null, { status: 400 });
 
 	const visitor = identify(event);
-	if (visitor) track(visitor, 'view', new URL(path, event.url).pathname);
+	if (visitor) {
+		const page = new URL(path, event.url);
+		track(visitor, 'view', page.pathname);
+		metaView(event, visitor, page);
+	}
 
 	return new Response(null, { status: 204 });
 };

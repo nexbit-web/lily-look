@@ -12,13 +12,21 @@ const visitor = { id: 'abc123def456ghi789jk', source: 'direct', device: 'mobile'
 const identify = vi.fn();
 const track = vi.fn();
 const optOut = vi.fn();
+const rememberAdClick = vi.fn();
+const metaView = vi.fn();
+let verification = '';
 
 vi.mock('$lib/server/db', () => ({ isDatabaseConfigured: () => configured }));
 vi.mock('$lib/server/analytics', () => ({ identify, track, optOut }));
+vi.mock('$lib/server/meta', () => ({
+	rememberAdClick,
+	metaView,
+	domainVerification: () => verification
+}));
 
 const { handle } = await import('$src/hooks.server');
 
-const PAGE = '<html><head>%lily.jsonld%</head><body></body></html>';
+const PAGE = '<html><head>%lily.jsonld% %lily.verify%</head><body></body></html>';
 
 type Options = {
 	jsonLd?: Record<string, unknown>[];
@@ -56,6 +64,7 @@ async function request(path: string, options: Options = {}) {
 
 beforeEach(() => {
 	configured = true;
+	verification = '';
 	vi.clearAllMocks();
 	identify.mockReturnValue(visitor);
 	optOut.mockReturnValue(null);
@@ -120,6 +129,41 @@ describe('Schema.org', () => {
 		});
 
 		expect(html.match(/<\/script>/g)).toHaveLength(1);
+	});
+});
+
+describe('реклама Meta', () => {
+	it('сторінка відкрилась цілком — клік запам’ятовано до відповіді, показ передано', async () => {
+		await request('https://lilylook.store/product/palto?fbclid=abc');
+
+		expect(rememberAdClick).toHaveBeenCalledTimes(1);
+		expect(metaView).toHaveBeenCalledWith(
+			expect.anything(),
+			visitor,
+			new URL('https://lilylook.store/product/palto?fbclid=abc')
+		);
+	});
+
+	it('бот, команда, перехід усередині сайту, 404 — нічого', async () => {
+		identify.mockReturnValue(null);
+		await request('https://lilylook.store/');
+		identify.mockReturnValue(visitor);
+		await request('https://lilylook.store/product/palto', { data: true });
+		await request('https://lilylook.store/nemaie', { routeId: null });
+
+		expect(rememberAdClick).not.toHaveBeenCalled();
+		expect(metaView).not.toHaveBeenCalled();
+	});
+
+	it('код підтвердження домену стає метатегом у <head>, без нього — порожньо', async () => {
+		verification = '<meta name="facebook-domain-verification" content="abc123xyz7890def" />';
+		const { html } = await request('https://lilylook.store/');
+		verification = '';
+		const plain = await request('https://lilylook.store/');
+
+		expect(html).toContain('facebook-domain-verification');
+		expect(plain.html).not.toContain('%lily.verify%');
+		expect(plain.html).not.toContain('facebook-domain-verification');
 	});
 });
 

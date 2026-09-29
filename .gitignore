@@ -25,3 +25,6 @@ vite.config.ts.timestamp-*
 
 # Prisma Client (генерується через `npm run db:generate`)
 /prisma/generated
+
+# Особисті налаштування Claude Code
+.claude/settings.local.json
