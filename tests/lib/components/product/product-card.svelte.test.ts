@@ -23,17 +23,51 @@ describe('картка товару', () => {
 		expect(screen.getByRole('link')).toHaveAttribute('href', '/product/suknia-olivia');
 	});
 
-	it('рахує знижку від старої ціни', () => {
+	/** Плашка знижки — бігучий рядок; скрінрідер читає його один раз, із sr-only. */
+	const strip = () => document.querySelector('[data-slot="sale-strip"] .sr-only')?.textContent;
+
+	it('рахує знижку від старої ціни й суму економії', () => {
 		render(ProductCard, { product: product({ price: 219_900, compareAt: 299_900 }) });
 
-		// 219900 / 299900 → -27 %
-		expect(screen.getByText('−27%')).toBeInTheDocument();
+		// 2 199 від 2 999 — 26,68 %: точно, а не округлено вгору до 27
+		expect(strip()).toContain('−26,68%');
+		expect(strip()).toMatch(/Економія 800\s?грн/);
+	});
+
+	it('знижка з CRM 33.6 % — «−33,6%»', () => {
+		render(ProductCard, { product: product({ price: 299_000 - 100_464, compareAt: 299_000 }) });
+
+		expect(strip()).toContain('−33,6%');
+	});
+
+	it('ціла знижка — без коми', () => {
+		render(ProductCard, { product: product({ price: 240_000, compareAt: 300_000 }) });
+
+		expect(strip()).toContain('−20%');
+	});
+
+	it('бігучий рядок схований від скрінрідера — текст читається один раз', () => {
+		render(ProductCard, { product: product({ price: 240_000, compareAt: 300_000 }) });
+
+		expect(document.querySelector('[data-slot="sale-strip"] .marquee')).toHaveAttribute(
+			'aria-hidden',
+			'true'
+		);
 	});
 
 	it('без старої ціни плашки немає', () => {
 		render(ProductCard, { product: product({ compareAt: 199_900 }) });
 
-		expect(screen.queryByText(/%$/)).not.toBeInTheDocument();
+		expect(document.querySelector('[data-slot="sale-strip"]')).toBeNull();
+	});
+
+	it('під карткою — «Купити», а розпродане — «Переглянути»', () => {
+		const { unmount } = render(ProductCard, { product: product() });
+		expect(document.querySelector('[data-slot="card-cta"]')).toHaveTextContent('Купити');
+		unmount();
+
+		render(ProductCard, { product: product({ inStock: false }) });
+		expect(document.querySelector('[data-slot="card-cta"]')).toHaveTextContent('Переглянути');
 	});
 
 	it('друге фото лежить у картці й сховане від скрінрідера', () => {

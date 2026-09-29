@@ -27,7 +27,8 @@
      позицій і межі кожної картки, а не абстрактні блоки. -->
 <ul class="-mx-2 grid grid-cols-2 gap-x-2 gap-y-8 sm:mx-0 sm:gap-x-5 sm:gap-y-10 lg:grid-cols-4">
 	{#each products as product, index (product.id)}
-		<li use:reveal={{ delay: (index % 4) * STAGGER_MS }}>
+		<!-- flex — щоб картка витягнулась на висоту рядка й кнопки стали в лінію -->
+		<li class="flex" use:reveal={{ delay: (index % 4) * STAGGER_MS }}>
 			<ProductCard {product} priority={index < priority} lead={priority > 0 && index === 0} />
 		</li>
 	{/each}

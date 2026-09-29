@@ -1,4 +1,4 @@
-import { PRODUCTS_PER_PAGE, SIZE_ORDER, type SortOption } from '$lib/config';
+import { CATALOG_CACHE_MS, PRODUCTS_PER_PAGE, SIZE_ORDER, type SortOption } from '$lib/config';
 import { framesForColor, imageAlt } from '$lib/product-images';
 import type { SearchDoc } from '$lib/search';
 import type {
@@ -10,6 +10,7 @@ import type {
 	ProductDetail
 } from '$lib/types';
 import type { Prisma } from '../../../prisma/generated/client.js';
+import { cached } from './cache.js';
 import { db } from './db.js';
 import type { PriceRange } from './seo.js';
 
@@ -626,28 +627,43 @@ const RECOMMENDATION_WEIGHTS = {
 
 const RECOMMENDATION_POOL = 60;
 
+/**
+ * Пул кандидатів однаковий для всіх товарів: найновіші речі в наявності.
+ * Це найважчий запит сторінки товару (до секунди в Neon), тож тримаємо
+ * його хвилину в пам'яті, як і решту каталогу. Залишки самого товару
+ * сторінка й далі читає свіжими — кешуються лише сусідні картки.
+ * Один зайвий рядок — на випадок, коли в пулі опиниться сам товар.
+ */
+function recommendationPool() {
+	return cached('recommendation-pool', CATALOG_CACHE_MS, () =>
+		db.product.findMany({
+			// Радити те, чого немає на складі, немає сенсу — такі товари
+			// відсіюються ще в запиті, а не штрафом у скорингу.
+			where: VISIBLE_PRODUCT,
+			select: {
+				...CARD_SELECT,
+				isFeatured: true,
+				category: { select: { slug: true } },
+				// Перекриває `variants` із CARD_SELECT — тут потрібен ще й розмір,
+				// для скорингу. Порядок доводиться повторювати: без нього крапки
+				// кольорів на цих картках стояли б не так, як у списку категорії.
+				variants: {
+					where: AVAILABLE_VARIANT,
+					select: { color: true, size: true, stock: true },
+					orderBy: VARIANT_ORDER
+				}
+			},
+			// Пул обмежений: ранжувати всю базу в пам'яті не потрібно й дорого.
+			orderBy: { createdAt: 'desc' },
+			take: RECOMMENDATION_POOL + 1
+		})
+	);
+}
+
 export async function listRecommended(product: ProductDetail, limit = 4): Promise<ProductCard[]> {
-	const rows = await db.product.findMany({
-		// Радити те, чого немає на складі, немає сенсу — такі товари
-		// відсіюються ще в запиті, а не штрафом у скорингу.
-		where: { ...VISIBLE_PRODUCT, id: { not: product.id } },
-		select: {
-			...CARD_SELECT,
-			isFeatured: true,
-			category: { select: { slug: true } },
-			// Перекриває `variants` із CARD_SELECT — тут потрібен ще й розмір,
-			// для скорингу. Порядок доводиться повторювати: без нього крапки
-			// кольорів на цих картках стояли б не так, як у списку категорії.
-			variants: {
-				where: AVAILABLE_VARIANT,
-				select: { color: true, size: true, stock: true },
-				orderBy: VARIANT_ORDER
-			}
-		},
-		// Пул обмежений: ранжувати всю базу в пам'яті не потрібно й дорого.
-		orderBy: { createdAt: 'desc' },
-		take: RECOMMENDATION_POOL
-	});
+	const rows = (await recommendationPool())
+		.filter((row) => row.id !== product.id)
+		.slice(0, RECOMMENDATION_POOL);
 
 	const sourceColors = new Set(product.variants.map((variant) => variant.color));
 	const sourceSizes = new Set(

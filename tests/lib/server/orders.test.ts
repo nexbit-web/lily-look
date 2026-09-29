@@ -11,6 +11,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const readCart = vi.fn();
 const clearCart = vi.fn();
+const lineForVariant = vi.fn();
 const dispatchOrder = vi.fn();
 
 const tx = {
@@ -23,11 +24,11 @@ const db = {
 	order: { update: vi.fn() }
 };
 
-vi.mock('$lib/server/cart', () => ({ readCart, clearCart }));
+vi.mock('$lib/server/cart', () => ({ readCart, clearCart, lineForVariant }));
 vi.mock('$lib/server/db', () => ({ db }));
 vi.mock('$lib/server/bot/orders', () => ({ dispatchOrder }));
 
-const { createOrder } = await import('$lib/server/orders');
+const { createOrder, createQuickOrder } = await import('$lib/server/orders');
 
 const cookies = {} as Cookies;
 
@@ -189,5 +190,71 @@ describe('розсилка менеджерам', () => {
 		const result = await createOrder(cookies, input);
 
 		expect(result).toMatchObject({ ok: true, number: 'LL-ABC234' });
+	});
+});
+
+describe('createQuickOrder — «Купити в 1 клік»', () => {
+	const contact = { customerName: 'Олена', customerPhone: '+380671234567' };
+
+	beforeEach(() => {
+		lineForVariant.mockResolvedValue({ ...line, quantity: 1, lineTotal: 159_900 });
+		clearCart.mockClear();
+		tx.order.create.mockClear();
+		tx.productVariant.updateMany.mockClear();
+	});
+
+	it('одна річ, ім’я й телефон — замовлення без адреси, яку уточнить менеджер', async () => {
+		const result = await createQuickOrder('var-1', contact);
+
+		expect(result).toMatchObject({ ok: true, number: 'LL-ABC234' });
+		const data = tx.order.create.mock.calls[0][0].data;
+		expect(data).toMatchObject({
+			customerName: 'Олена',
+			customerPhone: '+380671234567',
+			customerEmail: null,
+			deliveryMethod: 'NOVA_POSHTA_BRANCH',
+			deliveryCity: null,
+			deliveryAddress: null,
+			subtotal: 159_900,
+			total: 159_900
+		});
+		expect(data.items.create).toHaveLength(1);
+		expect(data.items.create[0]).toMatchObject({ variantId: 'var-1', quantity: 1 });
+	});
+
+	it('залишок списується тим самим атомарним способом, що й з кошика', async () => {
+		await createQuickOrder('var-1', contact);
+
+		expect(tx.productVariant.updateMany).toHaveBeenCalledWith(
+			expect.objectContaining({
+				where: { id: 'var-1', isActive: true, stock: { gte: 1 } },
+				data: { stock: { decrement: 1 } }
+			})
+		);
+	});
+
+	it('менеджери отримують замовлення, а кошик покупця лишається як був', async () => {
+		await createQuickOrder('var-1', contact, 'https://lilylook.store');
+
+		expect(dispatchOrder).toHaveBeenCalledWith('LL-ABC234', 'https://lilylook.store');
+		expect(clearCart).not.toHaveBeenCalled();
+	});
+
+	it('розмір розібрали чи вимкнули — зрозуміла відмова, без замовлення', async () => {
+		lineForVariant.mockResolvedValue(null);
+
+		const result = await createQuickOrder('var-1', contact);
+
+		expect(result).toEqual({ ok: false, message: 'Цього розміру вже немає в наявності.' });
+		expect(tx.order.create).not.toHaveBeenCalled();
+	});
+
+	it('останню річ щойно забрав інший покупець — відмова, замовлення не створене', async () => {
+		tx.productVariant.updateMany.mockResolvedValueOnce({ count: 0 });
+
+		const result = await createQuickOrder('var-1', contact);
+
+		expect(result).toMatchObject({ ok: false });
+		expect(tx.order.create).not.toHaveBeenCalled();
 	});
 });

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { stickyColumn } from '$lib/actions/sticky-column';
 	import { reveal } from '$lib/actions/reveal';
 	import PageMeta from '$lib/components/layout/page-meta.svelte';
 	import AddToCartForm from '$lib/components/product/add-to-cart-form.svelte';
@@ -75,31 +76,38 @@
 
 	<!--
 		Фото займає більшу частину рядка (60/40): річ продає себе сама,
-		а панелі купівлі вистачає й вужчої колонки. Панель липне до шапки, тож кнопка лишається перед
-		очима, поки гортаєш опис; вона займає обидва рядки сітки, інакше
-		sticky не мав би куди їхати.
+		а панелі купівлі вистачає й вужчої колонки.
+
+		На широкому екрані обидві колонки липкі (`stickyColumn`): гортає сама
+		сторінка, плавно, а коротша колонка — зазвичай купівля — спершу
+		доїжджає до свого останнього рядка й зупиняється біля низу екрана,
+		поки довша колонка з фото й описом гортається далі.
+
+		На телефоні колонок немає — одна стрічка: фото, купівля, опис. Тому
+		ліва колонка там `contents`: її частини стають окремими рядками, і
+		купівля стає між фото й описом.
 	-->
-	<article class="grid gap-10 lg:grid-cols-[3fr_2fr] lg:gap-16">
+	<article class="grid gap-10 lg:grid-cols-[3fr_2fr] lg:items-start lg:gap-16">
 		<!-- key: при переході на інший товар вибір кольору/розміру має скинутись -->
 		{#key product.id}
-			<!-- На телефоні фото виходить за поля сторінки на всю ширину екрана:
-			     річ видно більше, а поля лишаються там, де їх чекає шапка. -->
-			<div class="max-sm:-mx-4 lg:col-start-1 lg:row-start-1">
-				<ProductGallery images={product.images} name={product.name} color={galleryColor} />
-			</div>
+			<div class="contents lg:sticky lg:block" use:stickyColumn>
+				<!-- На телефоні фото виходить за поля сторінки на всю ширину екрана:
+				     річ видно більше, а поля лишаються там, де їх чекає шапка. -->
+				<div class="max-lg:order-1 max-sm:-mx-4">
+					<ProductGallery images={product.images} name={product.name} color={galleryColor} />
+				</div>
 
-			<div class="lg:col-start-2 lg:row-span-2 lg:row-start-1">
-				<div class="lg:sticky lg:top-20">
-					<AddToCartForm
-						{product}
-						delivery={data.delivery}
-						onColorChange={(color) => (picked = color)}
-					/>
+				<div class="max-lg:order-3 lg:mt-10">
+					<ProductInfo description={product.description} attributes={product.attributes} {sku} />
 				</div>
 			</div>
 
-			<div class="lg:col-start-1 lg:row-start-2">
-				<ProductInfo description={product.description} attributes={product.attributes} {sku} />
+			<div class="max-lg:order-2 lg:sticky" use:stickyColumn>
+				<AddToCartForm
+					{product}
+					delivery={data.delivery}
+					onColorChange={(color) => (picked = color)}
+				/>
 			</div>
 		{/key}
 	</article>

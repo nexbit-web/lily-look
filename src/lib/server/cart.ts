@@ -1,5 +1,6 @@
 import type { CartLine, CartView } from '$lib/types';
 import type { Cookies } from '@sveltejs/kit';
+import type { Prisma } from '../../../prisma/generated/client.js';
 import { db } from './db.js';
 
 /**
@@ -69,6 +70,46 @@ function forgetCart(cookies: Cookies): void {
 	cartCache.delete(cookies);
 }
 
+type LineVariant = Prisma.ProductVariantGetPayload<{ select: typeof LINE_INCLUDE.variant.select }>;
+
+/**
+ * Позиція з варіанта: ціна з бази, фото обраного кольору, кількість не
+ * більша за залишок. `null` — купити не можна: товар чи розмір вимкнули в
+ * CRM або залишок скінчився.
+ */
+function lineOf(id: string, variant: LineVariant, wanted: number): CartLine | null {
+	if (!variant.product.isActive || !variant.isActive) return null;
+	const quantity = Math.min(wanted, variant.stock);
+	if (quantity < 1) return null;
+
+	const unitPrice = variant.finalPrice ?? variant.product.finalPrice;
+	return {
+		id,
+		variantId: variant.id,
+		productName: variant.product.name,
+		productSlug: variant.product.slug,
+		size: variant.size,
+		color: variant.color,
+		imageUrl: photoFor(variant.product.images, variant.color),
+		unitPrice,
+		quantity,
+		lineTotal: unitPrice * quantity,
+		stock: variant.stock
+	};
+}
+
+/**
+ * Одна річ поза кошиком — для «Купити в 1 клік». Та сама позиція, що
+ * й у кошику: ціна, фото, перевірка наявності — з одного місця.
+ */
+export async function lineForVariant(variantId: string): Promise<CartLine | null> {
+	const variant = await db.productVariant.findUnique({
+		where: { id: variantId },
+		select: LINE_INCLUDE.variant.select
+	});
+	return variant ? lineOf(variant.id, variant, 1) : null;
+}
+
 export function readCart(cookies: Cookies): Promise<CartView> {
 	const cached = cartCache.get(cookies);
 	if (cached) return cached;
@@ -93,28 +134,9 @@ async function loadCart(cookies: Cookies): Promise<CartView> {
 	// Куки живуть довше за дані (напр. після скидання БД) — тихо ігноруємо.
 	if (!cart) return EMPTY_CART;
 
-	const lines: CartLine[] = cart.items
-		// Товар або розмір могли вимкнути в CRM, поки кошик лежав.
-		.filter((item) => item.variant.product.isActive && item.variant.isActive)
-		.map((item) => {
-			const unitPrice = item.variant.finalPrice ?? item.variant.product.finalPrice;
-			// Залишок міг зменшитись, поки кошик лежав: не даємо замовити більше.
-			const quantity = Math.min(item.quantity, item.variant.stock);
-			return {
-				id: item.id,
-				variantId: item.variant.id,
-				productName: item.variant.product.name,
-				productSlug: item.variant.product.slug,
-				size: item.variant.size,
-				color: item.variant.color,
-				imageUrl: photoFor(item.variant.product.images, item.variant.color),
-				unitPrice,
-				quantity,
-				lineTotal: unitPrice * quantity,
-				stock: item.variant.stock
-			};
-		})
-		.filter((line) => line.quantity > 0);
+	const lines = cart.items
+		.map((item) => lineOf(item.id, item.variant, item.quantity))
+		.filter((line): line is CartLine => line !== null);
 
 	return {
 		id: cart.id,

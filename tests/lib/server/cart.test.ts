@@ -22,7 +22,7 @@ const db = {
 
 vi.mock('$lib/server/db', () => ({ db }));
 
-const { addToCart, clearCart, readCart, removeFromCart, setQuantity } =
+const { addToCart, clearCart, lineForVariant, readCart, removeFromCart, setQuantity } =
 	await import('$lib/server/cart');
 
 type SetCall = { name: string; value: string; options: Record<string, unknown> };
@@ -407,5 +407,31 @@ describe('addToCart', () => {
 			value: 'cart-new',
 			options: { httpOnly: true, sameSite: 'lax', path: '/' }
 		});
+	});
+});
+
+describe('lineForVariant — одна річ для «Купити в 1 клік»', () => {
+	it('ціна й фото — з бази, кількість — одна', async () => {
+		db.productVariant.findUnique.mockResolvedValue(variant({ finalPrice: 89_900 }));
+
+		expect(await lineForVariant('var-1')).toMatchObject({
+			variantId: 'var-1',
+			productSlug: 'suknia-olivia',
+			unitPrice: 89_900,
+			quantity: 1,
+			lineTotal: 89_900,
+			imageUrl: 'https://example.test/1.jpg'
+		});
+	});
+
+	it.each([
+		['такого варіанта немає', null],
+		['розмір вимкнули в CRM', variant({ isActive: false })],
+		['товар вимкнули в CRM', variant({ product: { ...variant().product, isActive: false } })],
+		['залишок скінчився', variant({ stock: 0 })]
+	])('%s — купити не можна', async (_case, row) => {
+		db.productVariant.findUnique.mockResolvedValue(row);
+
+		expect(await lineForVariant('var-1')).toBeNull();
 	});
 });

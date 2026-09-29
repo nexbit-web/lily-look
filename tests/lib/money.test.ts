@@ -1,5 +1,5 @@
 ﻿import { describe, expect, it } from 'vitest';
-import { discountPercent, formatPrice, priceAmount, priceValue } from '$lib/money';
+import { discountPercent, formatPercent, formatPrice, priceAmount, priceValue } from '$lib/money';
 
 /**
  * Гроші — цілі копійки. Головне, що тут перевіряється: жодних плаваючих
@@ -33,7 +33,19 @@ describe('formatPrice', () => {
 describe('discountPercent', () => {
 	it('рахує знижку від старої ціни', () => {
 		expect(discountPercent(80000, 100000)).toBe(20);
-		expect(discountPercent(66600, 99900)).toBe(33);
+		expect(discountPercent(66600, 99900)).toBe(33.33);
+	});
+
+	it('дробова знижка з CRM — як задана, а не округлена вгору', () => {
+		// 33.6 % від 2 990 грн: база рахує ROUND(299000 * 33.6 / 100) = 100464
+		expect(discountPercent(299_000 - 100_464, 299_000)).toBe(33.6);
+		// 12.25 % від 3 480 грн: ROUND(348000 * 12.25 / 100) = 42630
+		expect(discountPercent(348_000 - 42_630, 348_000)).toBe(12.25);
+	});
+
+	it('ціла знижка лишається цілою, хоч ціна й округлена до копійки', () => {
+		// 20 % від 999,99 грн: знижка 200,00 грн (округлено з 199,998)
+		expect(discountPercent(99_999 - 20_000, 99_999)).toBe(20);
 	});
 
 	it('мовчить, якщо знижки немає', () => {
@@ -41,6 +53,16 @@ describe('discountPercent', () => {
 		expect(discountPercent(100000, 100000)).toBeNull();
 		expect(discountPercent(100000, 90000)).toBeNull();
 		expect(discountPercent(100000, 0)).toBeNull();
+		// Різниця в копійку на великій ціні — це не знижка, а «−0 %».
+		expect(discountPercent(999_999, 1_000_000)).toBeNull();
+	});
+});
+
+describe('formatPercent', () => {
+	it('з комою, без зайвих нулів', () => {
+		expect(formatPercent(33.6)).toBe('33,6');
+		expect(formatPercent(12.25)).toBe('12,25');
+		expect(formatPercent(20)).toBe('20');
 	});
 });
 

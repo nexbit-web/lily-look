@@ -20,12 +20,13 @@
 	data-slot="grid-skeleton"
 >
 	{#each cells as cell (cell)}
-		<div>
+		<div class="rounded-lg border border-foreground/[0.07] p-1.5 sm:p-2">
 			<Skeleton class="aspect-3/4 w-full rounded-sm sm:aspect-4/5" />
 			<div class="mt-3 space-y-2">
 				<Skeleton class="h-3.5 w-3/4 rounded-sm" />
 				<Skeleton class="h-3.5 w-1/3 rounded-sm" />
 			</div>
+			<Skeleton class="mt-4 h-10 w-full rounded-md" />
 		</div>
 	{/each}
 </div>

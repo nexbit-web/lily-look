@@ -1,4 +1,4 @@
-import { deliveryMethod, type DeliveryMethodValue } from '$lib/config';
+import { deliveryMethod, isAddressPending, type DeliveryMethodValue } from '$lib/config';
 import { formatPrice } from '$lib/money';
 import { plural } from '$lib/plural';
 import { deliveryPriceLabel } from '$lib/store-facts';
@@ -108,11 +108,16 @@ export function buildOrderMessage(order: OrderMessage): string {
 	const delivery = deliveryMethod(order.method);
 	const destination = [order.city, order.address].filter(Boolean).map(escapeHtml).join(', ');
 	const moment = formatMoment(order.now ?? new Date());
+	const quick = isAddressPending(order);
 
 	// Перший рядок — те, за чим замовлення впізнають; другий — у якому воно
 	// стані й коли прийшло. Більше в шапці нічого не потрібно.
+	//
+	// Замовлення «в 1 клік» видно з першого ж рядка: саме його Telegram
+	// показує у сповіщенні, і менеджер ще до відкриття чату знає, що тут
+	// треба не збирати, а спершу дзвонити.
 	const head = [
-		`<b>Замовлення</b> <code>${escapeHtml(order.number)}</code>`,
+		`<b>${quick ? 'Замовлення в 1 клік' : 'Замовлення'}</b> <code>${escapeHtml(order.number)}</code>`,
 		[order.status ? escapeHtml(order.status) : null, escapeHtml(moment)]
 			.filter(Boolean)
 			.join(' · '),
@@ -126,7 +131,11 @@ export function buildOrderMessage(order: OrderMessage): string {
 			`<a href="tel:${escapeHtml(order.customerPhone)}">${escapeHtml(order.customerPhone)}</a>`,
 			order.customerEmail ? escapeHtml(order.customerEmail) : null
 		]),
-		...block(null, [escapeHtml(delivery.label), destination || null]),
+		...(quick
+			? block('Передзвоніть покупцю', [
+					'Покупець лишив лише ім’я й телефон. Уточніть розмір, місто й відділення Нової Пошти.'
+				])
+			: block(null, [escapeHtml(delivery.label), destination || null])),
 		...block('Коментар покупця', [order.comment ? escapeHtml(order.comment) : null])
 	];
 

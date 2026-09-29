@@ -29,6 +29,14 @@ export const checkoutSchema = z.object({
 });
 
 /**
+ * «Купити в 1 клік»: лише ім'я й телефон — з тими самими правилами, що й
+ * в оформленні, щоб менеджер отримав номер, за яким можна подзвонити.
+ */
+export const quickOrderSchema = checkoutSchema.pick({ customerName: true, customerPhone: true });
+
+export type QuickOrderInput = z.infer<typeof quickOrderSchema>;
+
+/**
  * Обов'язковість адреси залежить від способу доставки, тому перевіряємо її
  * окремо: у zod-схемі це вилилось би в нечитабельний ланцюжок refine.
  */

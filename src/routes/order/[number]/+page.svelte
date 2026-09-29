@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { IMAGE_SMALL, imageSrc } from '$lib/image';
 	import { Button } from '$lib/components/ui/button';
-	import { ORDER_STATUS_LABELS, SITE, deliveryMethod } from '$lib/config';
+	import { ORDER_STATUS_LABELS, SITE, deliveryMethod, isAddressPending } from '$lib/config';
 	import { formatPrice } from '$lib/money';
 	import { deliveryPriceLabel } from '$lib/store-facts';
 	import CheckIcon from '@lucide/svelte/icons/check';
@@ -11,6 +11,9 @@
 
 	const order = $derived(data.order);
 	const delivery = $derived(deliveryMethod(order.deliveryMethod));
+	const addressPending = $derived(
+		isAddressPending({ method: order.deliveryMethod, city: order.deliveryCity })
+	);
 	const deliveryLabel = $derived(
 		deliveryPriceLabel({
 			method: order.deliveryMethod,
@@ -52,7 +55,11 @@
 			<div class="sm:col-span-2">
 				<p class="text-xs tracking-[0.15em] text-muted-foreground uppercase">Доставка</p>
 				<p class="mt-1">
-					{delivery.label}
+					{#if addressPending}
+						Місто й відділення уточнимо, коли зателефонуємо
+					{:else}
+						{delivery.label}
+					{/if}
 					{#if order.deliveryCity}
 						· {order.deliveryCity}
 					{/if}

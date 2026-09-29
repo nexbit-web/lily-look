@@ -249,3 +249,40 @@ describe('довге замовлення', () => {
 		expect(plain(text())).not.toContain('та ще');
 	});
 });
+
+describe('замовлення в 1 клік', () => {
+	it('видно з першого рядка — саме його Telegram показує у сповіщенні', () => {
+		const [first] = text({ city: '', address: '' }).split('\n');
+
+		expect(plain(first)).toBe('Замовлення в 1 клік LL-ABC234');
+	});
+
+	it('менеджер бачить, що треба передзвонити й що саме уточнити', () => {
+		const message = plain(text({ city: '', address: '' }));
+
+		expect(message).toContain('Передзвоніть покупцю');
+		expect(message).toContain('Уточніть розмір, місто й відділення Нової Пошти');
+		expect(message).not.toContain('Нова Пошта — відділення');
+		// Телефон — посиланням, щоб набрати одним дотиком.
+		expect(text({ city: '', address: '' })).toContain('href="tel:+380671234567"');
+	});
+
+	it('звичайне замовлення з адресою — як і було', () => {
+		const message = plain(text());
+
+		expect(message.startsWith('Замовлення LL-ABC234')).toBe(true);
+		expect(message).toContain('Нова Пошта — відділення');
+		expect(message).not.toContain('Передзвоніть');
+	});
+
+	it('менеджер уточнив адресу в CRM — картка стає звичайною', () => {
+		const message = plain(text({ city: 'Київ', address: 'Відділення № 5' }));
+
+		expect(message).not.toContain('в 1 клік');
+		expect(message).toContain('Київ, Відділення № 5');
+	});
+
+	it('самовивіз без адреси — не «в 1 клік»: адреса йому й не потрібна', () => {
+		expect(plain(text({ method: 'PICKUP', city: '', address: '' }))).not.toContain('в 1 клік');
+	});
+});

@@ -5,7 +5,7 @@ import { tick } from 'svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import AddToCartForm from '$lib/components/product/add-to-cart-form.svelte';
 
-vi.mock('$app/forms', () => ({ enhance: () => ({ destroy() {} }) }));
+vi.mock('$app/forms', () => ({ enhance: () => ({ destroy() {} }), applyAction: vi.fn() }));
 vi.mock('$app/navigation', () => ({ invalidateAll: vi.fn() }));
 vi.mock('svelte-hot-french-toast', () => ({
 	default: { success: vi.fn(), error: vi.fn() }
@@ -48,7 +48,13 @@ const product: ProductDetail = {
  * Головна кнопка. Саме `getAll…[0]`: таку саму назву носить кнопка в панелі
  * знизу, і вона теж лежить у DOM — але в розмітці йде після основної.
  */
-const buy = () => screen.getAllByRole('button', { name: /Оберіть розмір|Додати в кошик|Немає/ })[0];
+const buy = () => screen.getAllByRole('button', { name: /Купити в 1 клік|Немає/ })[0];
+
+/** Друга дія — у кошик. */
+const toCart = () => screen.getAllByRole('button', { name: 'Додати в кошик' })[0];
+
+/** Вікно швидкого замовлення, якщо відкрите. */
+const quickDialog = () => screen.queryByRole('dialog');
 
 /** Панель швидкої купівлі знизу. Її немає в розмітці, поки вона не потрібна. */
 const bar = () => document.querySelector('[data-slot="buy-bar"]');
@@ -81,12 +87,30 @@ async function scrollPastButton() {
 }
 
 describe('форма купівлі', () => {
-	it('до вибору розміру купити не можна', () => {
+	it('головна дія — «Купити в 1 клік», у кошик — другою кнопкою', () => {
 		render(AddToCartForm, { product });
 
-		expect(buy()).toBeDisabled();
-		expect(buy()).toHaveTextContent('Оберіть розмір');
-		expect(document.querySelector('input[name="variantId"]')).toHaveValue('');
+		expect(buy()).toHaveTextContent('Купити в 1 клік');
+		expect(buy()).toBeEnabled();
+		expect(toCart()).toHaveAttribute('type', 'submit');
+	});
+
+	it('без розміру «Купити» не глухе: веде до вибору й каже, чого бракує', async () => {
+		render(AddToCartForm, { product });
+
+		await fireEvent.click(buy());
+
+		expect(quickDialog()).toBeNull();
+		expect(screen.getByText('Оберіть розмір, щоб замовити')).toBeInTheDocument();
+		expect(document.activeElement).toBe(screen.getByRole('button', { name: 'S' }));
+	});
+
+	it('без розміру «У кошик» не шле форму на сервер, а веде до вибору', async () => {
+		render(AddToCartForm, { product });
+
+		// false — обробник скасував надсилання форми.
+		expect(await fireEvent.click(toCart())).toBe(false);
+		expect(screen.getByText('Оберіть розмір, щоб замовити')).toBeInTheDocument();
 	});
 
 	it('після вибору розміру у форму лягає id варіанта', async () => {
@@ -95,8 +119,21 @@ describe('форма купівлі', () => {
 		await fireEvent.click(screen.getByRole('button', { name: 'S' }));
 
 		expect(document.querySelector('input[name="variantId"]')).toHaveValue('v-s-pudra');
-		expect(buy()).toBeEnabled();
-		expect(buy()).toHaveTextContent('Додати в кошик');
+	});
+
+	it('з розміром «Купити в 1 клік» відкриває замовлення саме цієї речі', async () => {
+		render(AddToCartForm, { product });
+		await fireEvent.click(screen.getByRole('button', { name: 'M' }));
+
+		await fireEvent.click(buy());
+
+		const dialog = quickDialog();
+		expect(dialog).toBeInTheDocument();
+		expect(dialog).toHaveTextContent('Пудровий · M');
+		expect(dialog?.querySelector('form')).toHaveAttribute('action', '?/quick');
+		expect(dialog?.querySelector('input[name="variantId"]')).toHaveValue('v-m-pudra');
+		// Окрема форма, а не вкладена в форму кошика.
+		expect(dialog?.querySelector('form')?.parentElement?.closest('form')).toBeNull();
 	});
 
 	it('розмір без залишку вибрати не можна', () => {
@@ -119,9 +156,10 @@ describe('форма купівлі', () => {
 
 		await fireEvent.click(screen.getByRole('button', { name: 'Зелений' }));
 
-		// у зеленому S немає — вибір скинуто, купити знову не можна
+		// у зеленому S немає — вибір скинуто, «Купити» знову веде до вибору
 		expect(document.querySelector('input[name="variantId"]')).toHaveValue('');
-		expect(buy()).toBeDisabled();
+		await fireEvent.click(buy());
+		expect(quickDialog()).toBeNull();
 	});
 
 	it('коли розібрали все — кнопка каже про це прямо', () => {
@@ -147,7 +185,8 @@ describe('форма купівлі', () => {
 
 	it('показує знижку від старої ціни', () => {
 		render(AddToCartForm, { product: { ...product, compareAt: 330_000 } });
-		expect(screen.getByText('−20%')).toBeInTheDocument();
+		// 2 649 від 3 300 — 19,73 %: показуємо як є, без округлення вгору
+		expect(screen.getByText('−19,73%')).toBeInTheDocument();
 	});
 
 	it('назва з розмітки лишається текстом, а не стає HTML', () => {
@@ -192,6 +231,34 @@ describe('форма купівлі', () => {
  * і сайт не має права його перетасовувати. Абетка тут завжди не та:
  * «Білий» став би перед «Чорним», а «L» перед «S».
  */
+describe('заміри над розміром', () => {
+	const measured: ProductDetail = {
+		...product,
+		measurements: [{ size: 'M', ua: '46', chest: 104, sleeve: 60, length: 110 }]
+	};
+
+	it('підказка пов’язана з кнопкою розміру', () => {
+		render(AddToCartForm, { product: measured });
+
+		const tip = screen.getByRole('tooltip', { hidden: true });
+		expect(screen.getByRole('button', { name: 'M' })).toHaveAttribute('aria-describedby', tip.id);
+		expect(tip).toHaveTextContent('Груди 104 см');
+	});
+
+	/**
+	 * Баг із телефона: прозора (opacity-0) підказка все одно займала місце,
+	 * у крайнього розміру вилазила за правий край, і сторінка ставала
+	 * ширшою за екран — заголовок і кнопка внизу обрізались.
+	 */
+	it('схована підказка не займає місця на сторінці', () => {
+		render(AddToCartForm, { product: measured });
+
+		const tip = screen.getByRole('tooltip', { hidden: true });
+		expect(tip).toHaveClass('hidden');
+		expect(tip).not.toHaveClass('opacity-0');
+	});
+});
+
 describe('порядок, заданий у CRM', () => {
 	const names = (slot: 'color-options' | 'size-options') =>
 		[...document.querySelectorAll(`[data-slot="${slot}"] button`)].map((button) =>
@@ -300,15 +367,17 @@ describe('панель купівлі знизу', () => {
 		expect(document.activeElement).toBe(screen.getByRole('button', { name: 'S' }));
 	});
 
-	it('з обраним розміром надсилає ту саму форму', async () => {
+	it('з обраним розміром — «Купити в 1 клік», що відкриває замовлення', async () => {
 		render(AddToCartForm, { product });
 		await fireEvent.click(screen.getByRole('button', { name: 'M' }));
 		await scrollPastButton();
 
-		const quick = screen.getAllByRole('button', { name: 'Додати в кошик' })[1];
+		const quick = screen.getAllByRole('button', { name: 'Купити в 1 клік' })[1];
+		expect(bar()?.contains(quick)).toBe(true);
 
-		expect(quick).toHaveAttribute('type', 'submit');
-		expect(quick.closest('form')).toBe(document.querySelector('form'));
+		await fireEvent.click(quick);
+
+		expect(quickDialog()).toHaveTextContent('Пудровий · M');
 	});
 
 	it('розпродану модель панель не рекламує', async () => {

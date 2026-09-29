@@ -1,15 +1,19 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
+	import { BUY_BUTTON, SECONDARY_BUTTON } from '$lib/components/product/buy-button';
+	import CarrierMarks from '$lib/components/product/carrier-marks.svelte';
+	import QuickOrderDialog from '$lib/components/product/quick-order-dialog.svelte';
 	import SizeChartDialog from '$lib/components/product/size-chart-dialog.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Spinner } from '$lib/components/ui/spinner';
-	import { RETURN_DAYS, SIZE_ORDER } from '$lib/config';
-	import { discountPercent, formatPrice } from '$lib/money';
+	import { FREE_DELIVERY_FROM, RETURN_DAYS, SIZE_ORDER } from '$lib/config';
+	import { discountPercent, formatPercent, formatPrice } from '$lib/money';
 	import { plural } from '$lib/plural';
 	import type { DeliveryOption, ProductDetail } from '$lib/types';
 	import { cn } from '$lib/utils';
 	import CheckIcon from '@lucide/svelte/icons/check';
+	import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
 	import RotateCcwIcon from '@lucide/svelte/icons/rotate-ccw';
 	import TruckIcon from '@lucide/svelte/icons/truck';
 	import WalletIcon from '@lucide/svelte/icons/wallet';
@@ -123,10 +127,59 @@
 		onColorChange?.(selectedColor);
 	});
 
-	function label() {
-		if (soldOut) return 'Немає в наявності';
-		if (!selected) return 'Оберіть розмір';
-		return 'Додати в кошик';
+	/**
+	 * Заміри розміру одним рядком: «UA 44 · Груди 96 см · Рукав 61 см».
+	 * Те саме, що в таблиці розмірів, — заміри самої речі з CRM. Чого CRM не
+	 * вказала, того в рядку немає; немає нічого — підказки теж.
+	 */
+	function measuresOf(size: string): string | null {
+		const row = product.measurements.find((item) => item.size === size);
+		if (!row) return null;
+		const parts = [
+			row.ua ? `UA ${row.ua}` : null,
+			row.chest !== null ? `Груди ${row.chest} см` : null,
+			row.sleeve !== null ? `Рукав ${row.sleeve} см` : null,
+			row.length !== null ? `Довжина ${row.length} см` : null
+		].filter(Boolean);
+		return parts.length ? parts.join(' · ') : null;
+	}
+
+	const selectedMeasures = $derived(selected ? measuresOf(selected.size) : null);
+
+	/** Вікно «Купити в 1 клік». */
+	let quickOpen = $state(false);
+	/** Натиснули «купити», не обравши розмір, — підсвічуємо, чого бракує. */
+	let askedForSize = $state(false);
+
+	/** Фото обраного кольору — для вікна швидкого замовлення. */
+	const photo = $derived(
+		(
+			product.images.find((image) => image.color === selectedColor) ??
+			product.images.find((image) => image.color === null) ??
+			product.images[0]
+		)?.url ?? null
+	);
+
+	/**
+	 * Головна дія сторінки. Кнопка активна завжди, поки є що купити: сіра
+	 * «Оберіть розмір» читалась як «тут нічого не натиснеш». Без розміру вона
+	 * веде до вибору, з розміром — відкриває швидке замовлення.
+	 */
+	function buyNow() {
+		if (!selected) {
+			askedForSize = true;
+			jumpToSizes();
+			return;
+		}
+		quickOpen = true;
+	}
+
+	/** «У кошик» без розміру — так само до вибору, а не відмова від сервера. */
+	function guardCart(event: MouseEvent) {
+		if (selected) return;
+		event.preventDefault();
+		askedForSize = true;
+		jumpToSizes();
 	}
 
 	// Найпопулярніший спосіб доставки — його дату й ціну показуємо в панелі,
@@ -145,28 +198,25 @@
 		{
 			icon: TruckIcon,
 			title: shipping ? `Отримаєте ${shipping.eta}` : 'Доставка по всій Україні',
-			text: 'Нова Пошта або Укрпошта · вартість за тарифами перевізника'
+			text: `Вартість за тарифами перевізника · від ${formatPrice(FREE_DELIVERY_FROM)} — безкоштовно`,
+			href: '/delivery',
+			carriers: true
 		},
 		{
 			icon: WalletIcon,
 			title: 'Оплата при отриманні',
-			text: 'Спершу приміряєте на пошті, потім платите'
+			text: 'Спершу приміряєте на пошті, потім платите · без передоплати',
+			href: null,
+			carriers: false
 		},
 		{
 			icon: RotateCcwIcon,
 			title: `Повернення протягом ${RETURN_DAYS} ${plural(RETURN_DAYS, 'дня', 'днів', 'днів')}`,
-			text: 'Не підійшов розмір — заберемо назад'
+			text: 'Не підійшов розмір — обміняємо або повернемо гроші',
+			href: '/returns',
+			carriers: false
 		}
 	]);
-
-	/**
-	 * Заливка кнопки — фонова картинка з background-position: center.
-	 * На наведення її ширина йде в нуль, тож колір стискається з обох
-	 * боків до середини, лишаючи рамку й текст того ж кольору.
-	 * `enabled:` — щоб вимкнена кнопка не «роздягалась» під курсором.
-	 */
-	const BUY_BUTTON =
-		'rounded-md border-2 border-[#53af01] bg-transparent bg-[linear-gradient(#53af01,#53af01)] bg-[length:100%_100%] bg-center bg-no-repeat duration-500 hover:bg-transparent enabled:hover:bg-[length:0%_100%] enabled:hover:text-[#53af01]';
 
 	let ctaBox = $state<HTMLElement | null>(null);
 	let sizesBox = $state<HTMLElement | null>(null);
@@ -214,11 +264,13 @@
 				<span class="text-muted-foreground tabular-nums line-through">
 					{formatPrice(product.compareAt)}
 				</span>
-				<span
-					class="rounded-full px-2 py-0.5 text-xs font-semibold text-sale ring-1 ring-sale/30 ring-inset"
-				>
-					−{discount}%
-				</span>
+				{#if discount}
+					<span
+						class="rounded-full px-2 py-0.5 text-xs font-semibold text-sale ring-1 ring-sale/30 ring-inset"
+					>
+						−{formatPercent(discount)}%
+					</span>
+				{/if}
 			{/if}
 		</div>
 
@@ -301,28 +353,52 @@
 						Усі розміри розібрали. Модель повернеться в наявність — з'явиться й вибір.
 					</p>
 				{:else}
-					<!-- Сітка, а не flex-wrap: кнопки однакової ширини читаються
-					     як один блок, а не як розсипаний набір. -->
-					<div data-slot="size-options" class="grid grid-cols-4 gap-2 sm:grid-cols-5">
-						{#each sizes as size (size)}
+					<!-- Розміри «таблетками»: однакова мінімальна ширина тримає ряд
+					     рівним, а довгий розмір («S/M», «4XL») просто ширшає. -->
+					<div data-slot="size-options" class="flex flex-wrap gap-2.5">
+						{#each sizes as size, index (size)}
 							{@const variant = variantFor(selectedColor, size)}
 							{@const available = (variant?.stock ?? 0) > 0}
-							<button
-								type="button"
-								disabled={!available}
-								onclick={() => (selectedSize = size)}
-								aria-pressed={selectedSize === size}
-								class={cn(
-									'h-10 cursor-pointer rounded-md border text-sm transition-colors',
-									selectedSize === size
-										? 'border-foreground bg-foreground text-background'
-										: 'hover:border-foreground/40',
-									!available &&
-										'cursor-not-allowed border-dashed text-muted-foreground/60 line-through hover:border-border'
-								)}
-							>
-								{size}
-							</button>
+							{@const measures = measuresOf(size)}
+							<div class="group/size relative">
+								<button
+									type="button"
+									disabled={!available}
+									onclick={() => (selectedSize = size)}
+									aria-pressed={selectedSize === size}
+									aria-describedby={measures ? `size-tip-${index}` : undefined}
+									class={cn(
+										'h-10 min-w-16 cursor-pointer rounded-full border px-5 text-base transition-colors',
+										selectedSize === size
+											? 'border-foreground ring-1 ring-foreground'
+											: 'border-foreground/25 hover:border-foreground/60',
+										!available &&
+											'cursor-not-allowed border-dashed text-muted-foreground/60 line-through hover:border-foreground/25'
+									)}
+								>
+									{size}
+								</button>
+
+								<!-- Заміри над розміром — під курсором або з клавіатури. На
+								     дотиковому екрані наводити нічим: там заміри обраного
+								     розміру стоять рядком під кнопками.
+								     Схована підказка — `hidden`, а не прозора: прозора все одно
+								     займала місце й у крайнього розміру вилазила за край екрана
+								     телефона — сторінка ставала ширшою й їхала вбік. -->
+								{#if measures}
+									<span
+										id="size-tip-{index}"
+										role="tooltip"
+										class="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2.5 hidden -translate-x-1/2 rounded-md bg-foreground/90 px-3 py-2 text-sm font-medium whitespace-nowrap text-background shadow-lg transition-[opacity,display] transition-discrete duration-150 group-hover/size:block group-has-focus-visible/size:block starting:opacity-0"
+									>
+										{measures}
+										<span
+											class="absolute top-full left-1/2 -translate-x-1/2 border-[6px] border-transparent border-t-foreground/90"
+											aria-hidden="true"
+										></span>
+									</span>
+								{/if}
+							</div>
 						{/each}
 					</div>
 				{/if}
@@ -330,39 +406,80 @@
 
 			<!-- Рядок під розмірами тримає висоту завжди: інакше кнопка
 			     підстрибувала б щоразу, коли зʼявляється попередження. -->
-			<p class="min-h-5 text-xs text-brand">
+			<p class="min-h-5 text-xs text-brand" aria-live="polite">
 				{#if selected && selected.stock <= LOW_STOCK}
 					Залишилось {selected.stock} шт. — устигніть
+				{:else if askedForSize && !selected}
+					Оберіть розмір, щоб замовити
+				{:else if selectedMeasures}
+					<span class="text-muted-foreground">Заміри {selectedSize}: {selectedMeasures}</span>
 				{/if}
 			</p>
 		</fieldset>
 
 		<div class="space-y-5">
-			<div bind:this={ctaBox}>
-				<Button
-					type="submit"
-					size="lg"
-					class={cn(BUY_BUTTON, 'h-14 w-full text-xl')}
-					disabled={!selected || submitting || soldOut}
-				>
-					<!-- Поки летить запит, кнопка показує тільки спінер: текст під ним
-					     миготів би, а стан «зачекайте» має читатись з одного погляду. -->
-					{#if submitting}
-						<Spinner class="size-7" aria-label="Додаємо в кошик" />
-					{:else}
-						{label()}
-					{/if}
-				</Button>
+			<div bind:this={ctaBox} class="space-y-3">
+				{#if soldOut}
+					<Button type="button" size="lg" class={cn(BUY_BUTTON, 'h-14 w-full text-xl')} disabled>
+						Немає в наявності
+					</Button>
+				{:else}
+					<Button
+						type="button"
+						size="lg"
+						class={cn(BUY_BUTTON, 'h-14 w-full text-xl')}
+						onclick={buyNow}
+					>
+						Купити в 1 клік
+					</Button>
+					<Button
+						type="submit"
+						size="lg"
+						class={cn(SECONDARY_BUTTON, 'h-12 w-full text-base')}
+						disabled={submitting}
+						onclick={guardCart}
+					>
+						<!-- Поки летить запит, кнопка показує тільки спінер: текст під ним
+						     миготів би, а стан «зачекайте» має читатись з одного погляду. -->
+						{#if submitting}
+							<Spinner class="size-6" aria-label="Додаємо в кошик" />
+						{:else}
+							Додати в кошик
+						{/if}
+					</Button>
+				{/if}
 			</div>
 
-			<ul class="space-y-4 text-sm">
+			<!-- Зелені знаки — «тут усе гаразд»; заголовок, що веде на умови, —
+			     зі стрілкою, як посилання в застосунках маркетплейсів. -->
+			<ul class="space-y-4 border-t pt-5 text-sm">
 				{#each assurances as item (item.title)}
 					<li class="flex gap-3">
-						<item.icon class="mt-0.5 size-4.5 shrink-0 text-foreground/40" aria-hidden="true" />
-						<span>
-							<span class="block">{item.title}</span>
-							<span class="block text-xs text-muted-foreground">{item.text}</span>
-						</span>
+						<item.icon
+							class="mt-px size-5 shrink-0 text-[#2f7d0a]"
+							strokeWidth={2.25}
+							aria-hidden="true"
+						/>
+						<div class="min-w-0 space-y-1">
+							{#if item.href}
+								<a
+									href={item.href}
+									class="group/link inline-flex items-center gap-0.5 font-semibold hover:text-[#2f7d0a]"
+								>
+									{item.title}
+									<ChevronRightIcon
+										class="size-4 transition-transform group-hover/link:translate-x-0.5 motion-reduce:transition-none"
+										aria-hidden="true"
+									/>
+								</a>
+							{:else}
+								<p class="font-semibold">{item.title}</p>
+							{/if}
+							<p class="text-xs text-muted-foreground">{item.text}</p>
+							{#if item.carriers}
+								<CarrierMarks />
+							{/if}
+						</div>
 					</li>
 				{/each}
 			</ul>
@@ -389,16 +506,8 @@
 					</div>
 
 					{#if selected}
-						<Button
-							type="submit"
-							class={cn(BUY_BUTTON, 'h-12 shrink-0 px-6')}
-							disabled={submitting}
-						>
-							{#if submitting}
-								<Spinner class="size-6" aria-label="Додаємо в кошик" />
-							{:else}
-								Додати в кошик
-							{/if}
+						<Button type="button" onclick={buyNow} class={cn(BUY_BUTTON, 'h-12 shrink-0 px-6')}>
+							Купити в 1 клік
 						</Button>
 					{:else}
 						<Button
@@ -413,4 +522,13 @@
 			</div>
 		{/if}
 	</form>
+
+	<!-- Окрема форма, не всередині форми кошика: у неї свій action і свої поля. -->
+	<QuickOrderDialog
+		bind:open={quickOpen}
+		name={product.name}
+		variant={selected}
+		{price}
+		image={photo}
+	/>
 </div>

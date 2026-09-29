@@ -192,6 +192,19 @@ export function deliveryMethod(value: DeliveryMethodValue) {
 }
 
 /**
+ * Куди везти, ще не відомо — замовлення «в 1 клік»: покупець лишив лише
+ * ім'я й телефон, місто й відділення менеджер уточнить дзвінком. Звичайне
+ * оформлення без міста не пропускає (`validateDelivery`), тож доставка без
+ * міста — рівно цей випадок.
+ */
+export function isAddressPending(order: {
+	method: DeliveryMethodValue;
+	city: string | null;
+}): boolean {
+	return deliveryMethod(order.method).kind !== 'pickup' && !order.city;
+}
+
+/**
  * Чи безкоштовна доставка для покупця.
  *
  * Самовивіз — завжди, а від порогу — будь-яким способом: перевізнику тоді

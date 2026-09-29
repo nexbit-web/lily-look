@@ -1,7 +1,8 @@
 import type { Cookies } from '@sveltejs/kit';
 import type { DeliveryMethodValue } from '$lib/config';
-import type { CheckoutInput } from '$lib/schemas';
-import { clearCart, readCart } from './cart.js';
+import type { CheckoutInput, QuickOrderInput } from '$lib/schemas';
+import type { CartLine } from '$lib/types';
+import { clearCart, lineForVariant, readCart } from './cart.js';
 import { db } from './db.js';
 import { DEFAULT_PAYMENT_PROVIDER, getPaymentProvider } from './payments.js';
 import { dispatchOrder } from './bot/orders.js';
@@ -32,11 +33,10 @@ export type CreateOrderResult =
 	| { ok: false; message: string };
 
 /**
- * Оформлення замовлення.
+ * Оформлення замовлення з кошика.
  *
- * Усе критичне відбувається в одній транзакції: списання залишків,
- * створення замовлення й очищення кошика. Якщо товар розібрали між
- * переглядом кошика і натисканням кнопки — транзакція відкотиться цілком.
+ * Кошик чиститься лише тоді, коли замовлення вже в базі: не вийшло
+ * (товар розібрали) — покупець повертається до того самого кошика.
  */
 export async function createOrder(
 	cookies: Cookies,
@@ -49,8 +49,58 @@ export async function createOrder(
 		return { ok: false, message: 'Кошик порожній.' };
 	}
 
+	const result = await placeOrder(cart.lines, input, origin);
+	if (result.ok) await clearCart(cookies);
+	return result;
+}
+
+/**
+ * «Купити в 1 клік»: одна річ зі сторінки товару, від покупця — лише ім'я
+ * й телефон. Місто й відділення менеджер уточнює дзвінком, тож доставка
+ * записується найчастішим способом (Нова Пошта, відділення) без адреси —
+ * так замовлення й видно: відділення без міста буває тільки тут.
+ *
+ * Кошик не чіпаємо: що лежало, те й лежить.
+ */
+export async function createQuickOrder(
+	variantId: string,
+	contact: QuickOrderInput,
+	origin?: string
+): Promise<CreateOrderResult> {
+	const line = await lineForVariant(variantId);
+	if (!line) return { ok: false, message: 'Цього розміру вже немає в наявності.' };
+
+	return placeOrder(
+		[line],
+		{
+			...contact,
+			customerEmail: '',
+			deliveryMethod: QUICK_ORDER_DELIVERY,
+			deliveryCity: '',
+			deliveryAddress: '',
+			comment: ''
+		},
+		origin
+	);
+}
+
+/** Спосіб доставки швидкого замовлення, поки менеджер не уточнив. */
+export const QUICK_ORDER_DELIVERY: DeliveryMethodValue = 'NOVA_POSHTA_BRANCH';
+
+/**
+ * Замовлення з готових позицій.
+ *
+ * Усе критичне відбувається в одній транзакції: списання залишків і
+ * створення замовлення. Якщо товар розібрали між переглядом і натисканням
+ * кнопки — транзакція відкотиться цілком.
+ */
+async function placeOrder(
+	lines: CartLine[],
+	input: CheckoutInput,
+	origin: string | undefined
+): Promise<CreateOrderResult> {
 	const deliveryMethod = input.deliveryMethod as DeliveryMethodValue;
-	const subtotal = cart.subtotal;
+	const subtotal = lines.reduce((sum, line) => sum + line.lineTotal, 0);
 	// Доставку покупець платить перевізнику сам, на пошті, або її оплачує
 	// магазин — у суму замовлення вона не входить ні в тому, ні в іншому разі.
 	// Нуль тут — не «безкоштовно»: хто платить, видно зі способу й суми
@@ -61,7 +111,7 @@ export async function createOrder(
 
 	try {
 		created = await db.$transaction(async (tx) => {
-			for (const line of cart.lines) {
+			for (const line of lines) {
 				// Умова stock >= quantity прямо в UPDATE робить перевірку
 				// й списання атомарними — без гонок між паралельними покупцями.
 				const updated = await tx.productVariant.updateMany({
@@ -88,7 +138,7 @@ export async function createOrder(
 					total: subtotal + deliveryCost,
 					paymentProvider: DEFAULT_PAYMENT_PROVIDER,
 					items: {
-						create: cart.lines.map((line) => ({
+						create: lines.map((line) => ({
 							variantId: line.variantId,
 							sku: `${line.productSlug}-${line.size}-${line.color}`,
 							productName: line.productName,
@@ -134,13 +184,11 @@ export async function createOrder(
 		console.error('[bot] розсилка менеджерам не пройшла', cause);
 	});
 
-	await clearCart(cookies);
-
 	return {
 		ok: true,
 		number: created.number,
 		redirectUrl: intent.redirectUrl,
-		items: cart.lines.map((line) => ({
+		items: lines.map((line) => ({
 			slug: line.productSlug,
 			name: line.productName,
 			unitPrice: line.unitPrice,

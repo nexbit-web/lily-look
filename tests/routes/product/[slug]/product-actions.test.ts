@@ -14,9 +14,12 @@ const track = vi.fn();
 const visitor = { id: 'abc123def456ghi789jk', source: 'facebook', device: 'mobile' };
 
 const metaAddToCart = vi.fn();
+const metaPurchase = vi.fn();
+const createQuickOrder = vi.fn();
 
 vi.mock('$lib/server/cart', () => ({ addToCart }));
-vi.mock('$lib/server/meta', () => ({ metaAddToCart }));
+vi.mock('$lib/server/meta', () => ({ metaAddToCart, metaPurchase }));
+vi.mock('$lib/server/orders', () => ({ createQuickOrder }));
 vi.mock('$lib/server/analytics', () => ({ identify: () => visitor, track }));
 vi.mock('$lib/server/catalog', () => ({ getProduct: vi.fn(), listRecommended: vi.fn() }));
 
@@ -37,6 +40,10 @@ function event(fields: Record<string, string>) {
 const add = (fields: Record<string, string>) =>
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	(actions.add as any)(event(fields));
+
+const quick = (fields: Record<string, string>) =>
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	(actions.quick as any)(event(fields));
 
 beforeEach(() => {
 	track.mockReset();
@@ -137,5 +144,80 @@ describe('відвідуваність', () => {
 			unitPrice: 189900,
 			quantity: 2
 		});
+	});
+});
+
+describe('action quick — «Купити в 1 клік»', () => {
+	const valid = { variantId: 'v-1', customerName: 'Олена', customerPhone: '+380671234567' };
+	const items = [{ slug: 'suknia-olivia', name: 'Сукня', unitPrice: 189_900, quantity: 1 }];
+
+	beforeEach(() => {
+		track.mockReset();
+		metaPurchase.mockReset();
+		createQuickOrder.mockReset();
+		createQuickOrder.mockResolvedValue({ ok: true, number: 'LL-ABC234', redirectUrl: null, items });
+	});
+
+	it('ім’я, телефон і розмір — замовлення створене, покупець на його сторінці', async () => {
+		await expect(quick(valid)).rejects.toMatchObject({
+			status: 303,
+			location: '/order/LL-ABC234'
+		});
+		expect(createQuickOrder).toHaveBeenCalledWith(
+			'v-1',
+			{ customerName: 'Олена', customerPhone: '+380671234567' },
+			'http://localhost'
+		);
+	});
+
+	it('замовлення рахується у воронці й іде в рекламу як покупка', async () => {
+		await expect(quick(valid)).rejects.toMatchObject({ status: 303 });
+
+		expect(track).toHaveBeenCalledWith(visitor, 'order', '/product/suknia-olivia');
+		expect(metaPurchase).toHaveBeenCalledWith(
+			expect.anything(),
+			visitor,
+			expect.objectContaining({ number: 'LL-ABC234', items }),
+			expect.objectContaining({ customerName: 'Олена', customerPhone: '+380671234567' })
+		);
+	});
+
+	it('без розміру — відмова, замовлення немає', async () => {
+		const result = await quick({ ...valid, variantId: '' });
+
+		expect(result).toMatchObject({
+			status: 400,
+			data: { quick: true, message: 'Оберіть розмір.' }
+		});
+		expect(createQuickOrder).not.toHaveBeenCalled();
+	});
+
+	it.each([
+		['без імені', { customerName: '' }, 'customerName'],
+		['кривий телефон', { customerPhone: '12345' }, 'customerPhone'],
+		['телефон без коду країни', { customerPhone: '0671234567' }, 'customerPhone']
+	])('%s — помилка біля поля, введене повертається', async (_case, patch, field) => {
+		const result = await quick({ ...valid, ...patch });
+
+		expect(result).toMatchObject({ status: 400, data: { quick: true } });
+		expect(result.data.errors[field]).toBeTruthy();
+		expect(result.data.values.customerName).toBe({ ...valid, ...patch }.customerName);
+		expect(createQuickOrder).not.toHaveBeenCalled();
+	});
+
+	it('розмір розібрали — зрозуміле повідомлення, ні статистики, ні реклами', async () => {
+		createQuickOrder.mockResolvedValue({
+			ok: false,
+			message: 'Цього розміру вже немає в наявності.'
+		});
+
+		const result = await quick(valid);
+
+		expect(result).toMatchObject({
+			status: 400,
+			data: { quick: true, message: 'Цього розміру вже немає в наявності.' }
+		});
+		expect(track).not.toHaveBeenCalled();
+		expect(metaPurchase).not.toHaveBeenCalled();
 	});
 });

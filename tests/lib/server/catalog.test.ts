@@ -12,6 +12,8 @@ const db = {
 };
 
 vi.mock('$lib/server/db', () => ({ db }));
+// Кеш пулу рекомендацій працює як на проді — саме його й перевіряємо.
+vi.mock('$app/environment', () => ({ dev: false }));
 
 const {
 	getProduct,
@@ -20,6 +22,7 @@ const {
 	listCategoryProducts,
 	listCollection,
 	listProducts,
+	listRecommended,
 	listSale
 } = await import('$lib/server/catalog');
 
@@ -465,5 +468,45 @@ describe('сторінка результатів пошуку', () => {
 		// Сортує база, тож сторінку вона ж і ріже.
 		expect(db.product.findMany.mock.calls[0][0].orderBy).toEqual({ finalPrice: 'asc' });
 		expect(db.product.count).toHaveBeenCalled();
+	});
+});
+
+describe('рекомендації', () => {
+	const viewed = {
+		id: 'p1',
+		price: 219_900,
+		category: { slug: 'sukni', name: 'Сукні' },
+		variants: [{ color: 'Чорний', size: 'M', stock: 2 }]
+	} as unknown as Parameters<typeof listRecommended>[0];
+
+	const candidate = (id: string, slug: string) =>
+		row({
+			id,
+			slug,
+			isFeatured: false,
+			category: { slug: 'sukni' },
+			variants: [{ color: 'Чорний', size: 'M', stock: 1 }]
+		});
+
+	it('не радить той самий товар і тримає пул хвилину в пам’яті', async () => {
+		vi.useFakeTimers();
+		db.product.findMany.mockResolvedValue([
+			candidate('p1', 'suknia-olivia'),
+			candidate('p2', 'suknia-mira')
+		]);
+
+		const first = await listRecommended(viewed);
+		const second = await listRecommended(viewed);
+
+		expect(first.map((card) => card.slug)).toEqual(['suknia-mira']);
+		expect(second).toEqual(first);
+		// Другий перегляд товару — без запиту в базу.
+		expect(db.product.findMany).toHaveBeenCalledTimes(1);
+
+		// Минула хвилина — пул береться свіжий.
+		vi.advanceTimersByTime(61_000);
+		await listRecommended(viewed);
+		expect(db.product.findMany).toHaveBeenCalledTimes(2);
+		vi.useRealTimers();
 	});
 });

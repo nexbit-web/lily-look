@@ -90,7 +90,7 @@
 {/if}
 
 {#if data.sale.length}
-	<section class="bg-brand-soft/50 py-10 md:py-14" aria-labelledby="sale-heading">
+	<section class="py-10 md:py-14" aria-labelledby="sale-heading">
 		<div class="mx-auto max-w-6xl px-4">
 			<SectionHeading
 				eyebrow="Вигідно"

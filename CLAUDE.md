@@ -50,6 +50,7 @@ npm run db:studio      # GUI к базе
 | Запросы каталога              | `src/lib/server/catalog.ts`                                      |
 | Корзина                       | `src/lib/server/cart.ts`                                         |
 | Оформление заказа             | `src/lib/server/orders.ts`                                       |
+| «Купити в 1 клік»             | `createQuickOrder` + `quick-order-dialog.svelte`, README         |
 | Подключение провайдера оплаты | `src/lib/server/payments.ts`                                     |
 | Телеграм-бот менеджеров       | `src/lib/server/bot/`                                            |
 | Правила статусов заказа       | `src/lib/bot/workflow.ts`                                        |

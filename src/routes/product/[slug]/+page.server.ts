@@ -3,9 +3,11 @@ import { deliveryWindow } from '$lib/delivery-estimate';
 import { identify, track } from '$lib/server/analytics';
 import { addToCart } from '$lib/server/cart';
 import { getProduct, listRecommended } from '$lib/server/catalog';
-import { metaAddToCart } from '$lib/server/meta';
+import { metaAddToCart, metaPurchase } from '$lib/server/meta';
+import { createQuickOrder } from '$lib/server/orders';
+import { fieldErrors, quickOrderSchema } from '$lib/schemas';
 import { breadcrumbsNode, productNode } from '$lib/server/seo';
-import { error, fail } from '@sveltejs/kit';
+import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params, locals, url }) => {
@@ -79,5 +81,45 @@ export const actions: Actions = {
 		}
 
 		return { added: true };
+	},
+
+	/**
+	 * «Купити в 1 клік»: ім'я, телефон і обраний розмір — і замовлення вже в
+	 * менеджерів. Доставку вони уточнюють дзвінком (див. `createQuickOrder`).
+	 * Відмова повертає введене й прапорець `quick`, щоб сторінка знала, що
+	 * помилка стосується саме цієї форми, а не кошика.
+	 */
+	quick: async (event) => {
+		const form = await event.request.formData();
+		const variantId = String(form.get('variantId') ?? '');
+		const values = {
+			customerName: String(form.get('customerName') ?? ''),
+			customerPhone: String(form.get('customerPhone') ?? '')
+		};
+
+		if (!variantId) {
+			return fail(400, { quick: true, message: 'Оберіть розмір.', values });
+		}
+		const parsed = quickOrderSchema.safeParse(values);
+		if (!parsed.success) {
+			return fail(400, { quick: true, errors: fieldErrors(parsed.error), values });
+		}
+
+		const result = await createQuickOrder(variantId, parsed.data, event.url.origin);
+		if (!result.ok) {
+			return fail(400, { quick: true, message: result.message, values });
+		}
+
+		const visitor = identify(event);
+		if (visitor) {
+			track(visitor, 'order', event.url.pathname);
+			metaPurchase(event, visitor, result, {
+				...parsed.data,
+				customerEmail: '',
+				deliveryCity: ''
+			});
+		}
+
+		redirect(303, result.redirectUrl ?? `/order/${result.number}`);
 	}
 };
