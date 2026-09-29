@@ -59,7 +59,7 @@ function request(
 /** Тіло останнього запиту в Meta. */
 function sent() {
 	const [address, init] = fetchMock.mock.calls.at(-1)!;
-	return { address: String(address), body: JSON.parse(init.body) };
+	return { address: String(address), headers: init.headers, body: JSON.parse(init.body) };
 }
 
 beforeEach(async () => {
@@ -187,10 +187,12 @@ describe('відправка', () => {
 		await flushMeta();
 
 		expect(fetchMock).toHaveBeenCalledTimes(1);
-		const { address, body } = sent();
+		const { address, headers, body } = sent();
 		expect(address).toBe('https://graph.facebook.com/v23.0/869971952778217/events');
 		expect(address).not.toContain('EAA');
-		expect(body.access_token).toBe('EAAtesttoken0123456789');
+		// Так само, як `npm run meta:check`, — цей шлях Meta підтвердила.
+		expect(headers.authorization).toBe('Bearer EAAtesttoken0123456789');
+		expect(JSON.stringify(body)).not.toContain('EAA');
 		expect(body.test_event_code).toBeUndefined();
 		expect(body.data.map((event: { event_name: string }) => event.event_name)).toEqual([
 			'PageView',
@@ -295,6 +297,35 @@ describe('відправка', () => {
 		for (const secret of ['380671234567', 'Олена', 'Коваль', 'Olena', 'Київ']) {
 			expect(raw).not.toContain(secret);
 		}
+	});
+
+	it('журнал показує, що Meta приймає події: першу пачку одразу, далі раз на годину', async () => {
+		vi.useFakeTimers({ toFake: ['Date'] });
+		const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+		const reply = (count: number) => new Response(JSON.stringify({ events_received: count }));
+		const view = () =>
+			metaView(request('https://lilylook.store/'), visitor, new URL('https://lilylook.store/'));
+
+		// Перша прийнята пачка цього модуля вже могла бути в попередніх тестах —
+		// тому дивимось на годинний звіт: між звітами журнал мовчить.
+		vi.setSystemTime(new Date('2030-01-01T10:00:00Z'));
+		fetchMock.mockResolvedValueOnce(reply(3));
+		view();
+		await flushMeta();
+		log.mockClear();
+
+		vi.setSystemTime(new Date('2030-01-01T10:20:00Z'));
+		fetchMock.mockResolvedValueOnce(reply(2));
+		view();
+		await flushMeta();
+		expect(log).not.toHaveBeenCalled();
+
+		vi.setSystemTime(new Date('2030-01-01T11:01:00Z'));
+		fetchMock.mockResolvedValueOnce(reply(4));
+		view();
+		await flushMeta();
+		expect(log).toHaveBeenCalledWith('[meta] за годину Meta прийняла 6 подій');
+		vi.useRealTimers();
 	});
 
 	it('код тестових подій — лише коли заданий', async () => {

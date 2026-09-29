@@ -149,6 +149,38 @@ const buffer: Pending[] = [];
 let timer: ReturnType<typeof setTimeout> | undefined;
 let shutdownHooked = false;
 
+/**
+ * Скільки подій Meta прийняла з останнього звіту в журналі. Без цього
+ * по журналу не зрозуміти, чи працює відправка: помилки видно, а успіх —
+ * ні. Звіт — при першій прийнятій пачці після запуску й далі раз на годину.
+ */
+const REPORT_MS = 60 * 60 * 1000;
+let accepted = 0;
+let reportedAt: number | null = null;
+
+/** `{"events_received": 3, …}` → 3; щось інше — `null`. */
+function receivedCount(reply: string): number | null {
+	try {
+		const count = (JSON.parse(reply) as { events_received?: unknown }).events_received;
+		return typeof count === 'number' ? count : null;
+	} catch {
+		return null;
+	}
+}
+
+function reportAccepted(count: number) {
+	accepted += count;
+	const now = Date.now();
+	if (reportedAt !== null && now - reportedAt < REPORT_MS) return;
+	console.log(
+		reportedAt === null
+			? `[meta] працює: Meta прийняла першу пачку, ${accepted} подій`
+			: `[meta] за годину Meta прийняла ${accepted} подій`
+	);
+	accepted = 0;
+	reportedAt = now;
+}
+
 function push(event: RequestLike, visitor: Visitor, pending: Omit<Pending, 'time' | 'person'>) {
 	if (!isMetaConfigured() || buffer.length >= MAX_BUFFER) return;
 	buffer.push({
@@ -360,19 +392,23 @@ export async function flushMeta(): Promise<void> {
 	try {
 		const response = await fetch(`${GRAPH}/${encodeURIComponent(pixel)}/events`, {
 			method: 'POST',
-			headers: { 'content-type': 'application/json' },
+			// Токен — у заголовку, як у `npm run meta:check`: цей шлях Meta
+			// підтвердила пробною подією. І не в адресі — адреси йдуть у журнали.
+			headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
 			body: JSON.stringify({
 				data: batch.map(toPayload),
-				// Токен — у тілі, а не в адресі: адреси потрапляють у журнали.
-				access_token: token,
 				test_event_code: testCode || undefined
 			}),
 			signal: AbortSignal.timeout(15_000)
 		});
+		const reply = await response.text();
 		if (!response.ok) {
-			const reason = (await response.text()).slice(0, 500);
-			console.error(`[meta] Meta не прийняла ${batch.length} подій: ${response.status} ${reason}`);
+			console.error(
+				`[meta] Meta не прийняла ${batch.length} подій: ${response.status} ${reply.slice(0, 500)}`
+			);
+			return;
 		}
+		reportAccepted(receivedCount(reply) ?? batch.length);
 	} catch (error) {
 		console.error(`[meta] не вдалося відправити ${batch.length} подій`, error);
 	}
