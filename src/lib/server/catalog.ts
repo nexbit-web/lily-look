@@ -331,7 +331,11 @@ export async function listCategoryProducts(slug: string, limit?: number): Promis
  * Категорії без товару (або вже без такої адреси) полиці не отримують —
  * порожній заголовок посеред сторінки виглядав би як збій.
  */
-export async function listCollection(categorySlugs: readonly string[]): Promise<CollectionShelf[]> {
+export async function listCollection(
+	categorySlugs: readonly string[],
+	/** Ці моделі — першими на своїй полиці; див. `Collection.firstNamed` у config.ts. */
+	firstNamed?: RegExp
+): Promise<CollectionShelf[]> {
 	const rows = await db.category.findMany({
 		where: { slug: { in: [...categorySlugs] } },
 		select: {
@@ -345,7 +349,14 @@ export async function listCollection(categorySlugs: readonly string[]): Promise<
 	return categorySlugs.flatMap((slug) => {
 		const row = bySlug.get(slug);
 		if (!row || row.products.length === 0) return [];
-		return [{ slug: row.slug, name: row.name, products: row.products.map(toCard) }];
+		// Сортування стабільне: усередині «спершу» й «потім» лишається порядок
+		// бази — новіші вище.
+		const products = firstNamed
+			? [...row.products].sort(
+					(a, b) => Number(firstNamed.test(b.name)) - Number(firstNamed.test(a.name))
+				)
+			: row.products;
+		return [{ slug: row.slug, name: row.name, products: products.map(toCard) }];
 	});
 }
 

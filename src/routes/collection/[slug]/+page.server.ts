@@ -18,7 +18,7 @@ export const load: PageServerLoad = async ({ params, url, locals }) => {
 
 	// Сторінка однакова для всіх — тримаємо в пам'яті, як і головну.
 	const shelves = await cached(`collection:${collection.slug}`, CATALOG_CACHE_MS, () =>
-		listCollection(collection.categories)
+		listCollection(collection.categories, collection.firstNamed)
 	);
 
 	const products = shelves.flatMap((shelf) => shelf.products);

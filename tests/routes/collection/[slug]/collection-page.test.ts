@@ -58,12 +58,29 @@ beforeEach(() => {
 });
 
 describe('сторінка колекції', () => {
+	it('зимова: від найактуальнішого до решти, зимові моделі — першими на полиці', async () => {
+		listCollection.mockResolvedValue(shelves);
+
+		const { data } = await open('winter');
+
+		const [categories, firstNamed] = listCollection.mock.calls[0];
+		expect(categories).toEqual(['zymovi-kurtky', 'palto', 'demisezonni-kurtky', 'bombery']);
+		expect(firstNamed.test('Зимове шоколадне пальто')).toBe(true);
+		expect(firstNamed.test('Тепле пухнасте пальто')).toBe(true);
+		expect(firstNamed.test('Зимовий пуховик з хутряним коміром')).toBe(true);
+		expect(firstNamed.test('Жіноче осіннє пальто')).toBe(false);
+		expect(data.seo.canonical).toBe('/collection/winter');
+	});
+
 	it('бере склад із config і рахує всі моделі з усіх полиць', async () => {
 		listCollection.mockResolvedValue(shelves);
 
 		const { data } = await open('autumn');
 
-		expect(listCollection).toHaveBeenCalledWith(expect.arrayContaining(['demisezonni-kurtky']));
+		expect(listCollection).toHaveBeenCalledWith(
+			expect.arrayContaining(['demisezonni-kurtky']),
+			undefined
+		);
 		expect(data.total).toBe(3);
 		expect(data.seo.canonical).toBe('/collection/autumn');
 		expect(data.seo.index).toBe(true);

@@ -43,14 +43,15 @@ beforeEach(() => {
 });
 
 describe('банери головної', () => {
-	it('осінь веде на колекцію, куртки — у свою категорію, доставка — нікуди', async () => {
+	it('зима веде на колекцію, куртки — у свою категорію, доставка — нікуди', async () => {
 		const result = await banners([
+			category('zymovi-kurtky', 'Зимові куртки'),
 			category('demisezonni-kurtky', 'Демісезонні куртки'),
 			category('palto', 'Пальто')
 		]);
 
 		expect(result.map((banner) => [banner.image, banner.href])).toEqual([
-			['/banners/autumn-collection', '/collection/autumn'],
+			['/banners/winter-collection', '/collection/winter'],
 			['/banners/demi-season-jackets', '/catalog/demisezonni-kurtky'],
 			['/banners/free-delivery', null]
 		]);
@@ -68,12 +69,12 @@ describe('банери головної', () => {
 		const result = await banners([category('palto', 'Пальто')]);
 
 		expect(result.map((banner) => banner.image)).toEqual([
-			'/banners/autumn-collection',
+			'/banners/winter-collection',
 			'/banners/free-delivery'
 		]);
 	});
 
-	it('в осінніх категоріях нічого немає — банер колекції не веде в порожнечу', async () => {
+	it('у категоріях зимової колекції нічого немає — банер не веде в порожнечу', async () => {
 		const result = await banners([category('rubashky', 'Сорочки')]);
 
 		expect(result.map((banner) => banner.image)).toEqual(['/banners/free-delivery']);

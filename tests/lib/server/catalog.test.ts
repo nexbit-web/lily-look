@@ -398,6 +398,26 @@ describe('колекція', () => {
 		});
 	});
 
+	it('сезонні моделі — першими на полиці, решта нижче в порядку бази', async () => {
+		db.category.findMany.mockResolvedValue([
+			{
+				slug: 'palto',
+				name: 'Пальто',
+				products: [
+					row({ id: 'p1', name: 'Жіноче осіннє пальто' }),
+					row({ id: 'p2', name: 'Зимове шоколадне пальто' }),
+					row({ id: 'p3', name: 'Чорне жіноче пальто' }),
+					row({ id: 'p4', name: 'Тепле пухнасте пальто' })
+				]
+			}
+		]);
+
+		const [shelf] = await listCollection(['palto'], /зимов|тепл/i);
+
+		// Нічого не відкинуто — лише переставлено.
+		expect(shelf.products.map((product) => product.id)).toEqual(['p2', 'p4', 'p1', 'p3']);
+	});
+
 	it('розібрана категорія й категорія зі зміненою адресою полиці не отримують', async () => {
 		db.category.findMany.mockResolvedValue([{ slug: 'palto', name: 'Пальто', products: [] }]);
 

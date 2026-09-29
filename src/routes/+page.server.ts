@@ -88,16 +88,17 @@ async function buildHome() {
  */
 function buildBanners(categories: CategoryCard[]): Banner[] {
 	const inStock = new Set(categories.map((category) => category.slug));
-	const autumn = COLLECTIONS.find((collection) => collection.slug === 'autumn');
+	// Сезонна колекція — першою. Осіння лишається сторінкою (на неї можуть
+	// вести старі оголошення), але банер тепер зимовий.
+	const winter = COLLECTIONS.find((collection) => collection.slug === 'winter');
 	const jackets = categories.find((category) => /демісезон/i.test(category.name));
-
 	return [
-		...(autumn && autumn.categories.some((slug) => inStock.has(slug))
+		...(winter && winter.categories.some((slug) => inStock.has(slug))
 			? [
 					{
-						image: '/banners/autumn-collection',
-						alt: `${autumn.name} — теплі образи для прохолодних днів`,
-						href: `/collection/${autumn.slug}`
+						image: '/banners/winter-collection',
+						alt: `${winter.name} — зимові куртки, пуховики й теплі пальта`,
+						href: `/collection/${winter.slug}`
 					}
 				]
 			: []),
