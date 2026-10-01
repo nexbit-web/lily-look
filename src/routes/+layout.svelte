@@ -7,6 +7,8 @@
 	import Header from '$lib/components/layout/header.svelte';
 	import PrizeBar from '$lib/components/wheel/prize-bar.svelte';
 	import { WHEEL_DELAY_MS } from '$lib/config';
+	import notoCyrillic from '@fontsource-variable/noto-sans/files/noto-sans-cyrillic-wght-normal.woff2?url';
+	import playfairCyrillic from '@fontsource-variable/playfair-display/files/playfair-display-cyrillic-wght-normal.woff2?url';
 	import nprogress from 'nprogress';
 	import type { Component } from 'svelte';
 	import { slide } from 'svelte/transition';
@@ -96,6 +98,18 @@
 		};
 	});
 </script>
+
+<!--
+	Два шрифти, якими набрано майже все на екрані: український текст і
+	заголовки. Без підказки браузер знаходить їх лише після розбору стилів і
+	розкладки — вони приїжджали на ~1.7 с, і сторінка перемальовувалась
+	заново. Латиницю (цифри, логотип) не підтягуємо наперед: на повільному
+	4G вона відбирала б канал у головного фото.
+-->
+<svelte:head>
+	<link rel="preload" href={notoCyrillic} as="font" type="font/woff2" crossorigin="anonymous" />
+	<link rel="preload" href={playfairCyrillic} as="font" type="font/woff2" crossorigin="anonymous" />
+</svelte:head>
 
 <div class="flex min-h-screen flex-col">
 	{#if data.prize && !page.url.pathname.startsWith('/order/')}

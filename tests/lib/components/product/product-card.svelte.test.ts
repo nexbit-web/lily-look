@@ -140,11 +140,17 @@ describe('фото картки', () => {
 		});
 
 		const image = screen.getByAltText('Сукня');
-		// Один розмір на всі екрани: CDN ріже кадр один раз, а не під кожен екран окремо.
 		expect(image.getAttribute('src')).toBe(
 			'https://res.cloudinary.com/demo/image/upload/f_auto,q_auto,c_limit,w_600/v1/lily/abc.png'
 		);
-		expect(image.hasAttribute('srcset')).toBe(false);
+		// Дві спільні для сайту ширини: телефон бере 400 (на ~45 % легше),
+		// екран ×3 і десктоп — 600. Нових нарізок у CDN це не додає.
+		expect(image.getAttribute('srcset')).toBe(
+			'https://res.cloudinary.com/demo/image/upload/f_auto,q_auto,c_limit,w_400/v1/lily/abc.png 400w, ' +
+				'https://res.cloudinary.com/demo/image/upload/f_auto,q_auto,c_limit,w_600/v1/lily/abc.png 600w'
+		);
+		// Без `sizes` браузер вважав би фото на всю ширину й брав би 600 завжди.
+		expect(image.getAttribute('sizes')).toBe('(min-width: 1024px) 288px, 50vw');
 	});
 
 	it('CDN не віддав кадр — показуємо оригінал, а не сіру пляму', async () => {

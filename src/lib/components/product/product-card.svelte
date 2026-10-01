@@ -1,6 +1,13 @@
 <script lang="ts">
 	import { CARD_BUY, CARD_VIEW } from '$lib/components/product/buy-button';
-	import { IMAGE_CARD, fallbackToOriginal, imageSrc } from '$lib/image';
+	import {
+		CARD_SIZES,
+		IMAGE_CARD,
+		IMAGE_WIDTHS,
+		fallbackToOriginal,
+		imageSrc,
+		imageSrcSet
+	} from '$lib/image';
 	import { discountPercent, formatPercent, formatPrice } from '$lib/money';
 	import { plural } from '$lib/plural';
 	import type { ProductCard } from '$lib/types';
@@ -98,6 +105,8 @@
 			<img
 				bind:this={cover}
 				src={imageSrc(product.image.url, IMAGE_CARD)}
+				srcset={imageSrcSet(product.image.url, IMAGE_WIDTHS.card)}
+				sizes={CARD_SIZES}
 				alt={product.image.alt}
 				loading={priority ? 'eager' : 'lazy'}
 				fetchpriority={lead ? 'high' : undefined}
