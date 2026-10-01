@@ -1,5 +1,12 @@
 ﻿import { describe, expect, it } from 'vitest';
-import { discountPercent, formatPercent, formatPrice, priceAmount, priceValue } from '$lib/money';
+import {
+	discountPercent,
+	formatAmount,
+	formatPercent,
+	formatPrice,
+	priceAmount,
+	priceValue
+} from '$lib/money';
 
 /**
  * Гроші — цілі копійки. Головне, що тут перевіряється: жодних плаваючих
@@ -8,6 +15,14 @@ import { discountPercent, formatPercent, formatPrice, priceAmount, priceValue } 
 
 /** Intl розділяє тисячі нерозривним пробілом — прибираємо будь-які пробіли. */
 const digits = (value: string) => value.replace(/[^0-9]/g, '');
+
+describe('formatAmount', () => {
+	it('те саме число, що й у formatPrice, але без валюти', () => {
+		expect(digits(formatAmount(129900))).toBe('1299');
+		expect(formatPrice(129900).startsWith(formatAmount(129900))).toBe(true);
+		expect(formatAmount(129900)).not.toContain('грн');
+	});
+});
 
 describe('formatPrice', () => {
 	it('показує гривні без копійок', () => {

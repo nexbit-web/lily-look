@@ -40,7 +40,11 @@ const FLUSH_MS = 30_000;
  */
 const MAX_BUFFER = 5_000;
 
-export type EventType = 'view' | 'add_to_cart' | 'order';
+/**
+ * `wheel_shown` — вікно з колесом показали, `wheel_spin` — покрутив і виграв
+ * приз (одна на людину: «Ще спроба» не рахується).
+ */
+export type EventType = 'view' | 'add_to_cart' | 'order' | 'wheel_shown' | 'wheel_spin';
 export type PageKind =
 	'home' | 'catalog' | 'collection' | 'product' | 'cart' | 'checkout' | 'order' | 'info' | 'other';
 export type Source = 'facebook' | 'instagram' | 'google' | 'direct' | 'other';

@@ -37,7 +37,8 @@ export const actions: Actions = {
 
 		const result = await createOrder(cookies, parsed.data, url.origin);
 		if (!result.ok) {
-			return fail(400, { message: result.message, values });
+			// `prizeTaken` — сторінка оновить дані й прибере знижку з підсумку.
+			return fail(400, { message: result.message, values, prizeTaken: !!result.prizeTaken });
 		}
 
 		const visitor = identify(event);

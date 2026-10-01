@@ -204,7 +204,7 @@ model Discount {
   scope   DiscountScope
   /// Відсоток знижки, 1..90, до двох знаків після крапки (33.6).
   /// Ціну рахує база — див. lily_final_price.
-  percent Decimal? @db.Decimal(5, 2)
+  percent Decimal?      @db.Decimal(5, 2)
   /// Фіксована знижка в копійках.
   amount  Int?
 
@@ -310,6 +310,14 @@ model Order {
   deliveryCost Int @default(0)
   total        Int
 
+  /// Приз колеса фортуни, назвою на момент замовлення: «Знижка 7%»,
+  /// «Безкоштовна доставка». Порожньо — приза не було.
+  prize             String?
+  /// Знижка приза в копійках; уже віднята в `total`.
+  prizeDiscount     Int     @default(0)
+  /// Виграно безкоштовну доставку: перевізнику платить магазин.
+  prizeFreeDelivery Boolean @default(false)
+
   paymentStatus   PaymentStatus @default(UNPAID)
   /// Ідентифікатор провайдера оплати ("manual", "stripe", "liqpay"…).
   paymentProvider String        @default("manual")
@@ -330,6 +338,21 @@ model Order {
 /// Позиція замовлення — денормалізований знімок товару.
 /// Якщо товар пізніше перейменують, подорожчають або видалять,
 /// замовлення залишиться історично точним.
+/// Розіграш колеса фортуни. Пише лише сайт: один рядок — одне обертання.
+/// Приз виграний — живе до `expiresAt`; застосований у замовленні —
+/// `usedAt` і номер замовлення.
+model WheelSpin {
+  id          String    @id @default(cuid())
+  /// Код приза з `WHEEL_PRIZES` у `config.ts`: off3, delivery…
+  prize       String
+  expiresAt   DateTime
+  usedAt      DateTime?
+  orderNumber String?
+  createdAt   DateTime  @default(now())
+
+  @@index([createdAt])
+}
+
 model OrderItem {
   id      String @id @default(cuid())
   orderId String
@@ -491,7 +514,8 @@ model PageEvent {
   id        BigInt   @id @default(autoincrement())
   /// Випадкова мітка браузера. Та сама мітка в різні дні — та сама людина.
   visitorId String
-  /// `view` — перегляд сторінки, `add_to_cart` — поклав у кошик, `order` — оформив.
+  /// `view` — перегляд сторінки, `add_to_cart` — поклав у кошик, `order` — оформив,
+  /// `wheel_shown` — показали колесо фортуни, `wheel_spin` — покрутив і виграв.
   type      String
   /// Що за сторінка: home, catalog, collection, product, cart, checkout, order, info, other.
   page      String

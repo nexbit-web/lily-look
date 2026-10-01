@@ -174,6 +174,18 @@ export type AutocompleteOption = {
 	cityRef?: string;
 };
 
+/** Виграний і ще не використаний приз колеса — те, що бачить покупець. */
+export type ActivePrize = {
+	code: string;
+	label: string;
+	/** Знижка на замовлення у відсотках; 0 — знижки немає. */
+	percent: number;
+	/** Безкоштовна доставка замість знижки. */
+	freeDelivery: boolean;
+	/** До коли діє, ISO-рядком: дата не переживає серіалізацію з сервера. */
+	expiresAt: string;
+};
+
 export type CartView = {
 	id: string | null;
 	lines: CartLine[];

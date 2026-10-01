@@ -16,6 +16,14 @@ export function formatPrice(kopiyky: number): string {
 }
 
 /**
+ * 129900 → "1 299" — лише число, без валюти. Для великої ціни на сторінці
+ * товару, де «грн» набрано дрібніше за саму суму.
+ */
+export function formatAmount(kopiyky: number): string {
+	return formatter.format(kopiyky / 100);
+}
+
+/**
  * 264900 → "2649.00" — ціна для машин: Schema.org, фід Merchant Center,
  * Open Graph. Крапка й рівно дві цифри копійок, без пробілів і валюти.
  */

@@ -83,6 +83,37 @@ export const RETURN_DAYS = 14;
 export const FREE_DELIVERY_FROM = 400_000;
 
 /**
+ * Колесо фортуни для нових відвідувачів: знижки до 10 % на все замовлення
+ * (і на акційні речі теж) або безкоштовна доставка. Лише знижки й
+ * доставка — жодних фізичних подарунків: за якість чужого товару в
+ * посилці відповідав би магазин.
+ *
+ * `weight` — шанс приза: «Ще спроба» (2 із 27, ≈7 %) випадає рідше за
+ * решту (5 із 27, ≈18,5 % кожен). На колесі ж усі сектори однакові —
+ * так воно симетричне й гарне. «Ще спроба» — не приз: колесо можна
+ * крутити ще раз. Сектори йдуть по колу в цьому порядку.
+ *
+ * `code` пишеться в базу (`WheelSpin.prize`), тож міняти його в уже
+ * розіграних призах не можна; назву, вагу й порядок — можна.
+ */
+export const WHEEL_PRIZES = [
+	{ code: 'off5', label: 'Знижка 5%', percent: 5, freeDelivery: false, weight: 5 },
+	{ code: 'off10', label: 'Знижка 10%', percent: 10, freeDelivery: false, weight: 5 },
+	{ code: 'off3', label: 'Знижка 3%', percent: 3, freeDelivery: false, weight: 5 },
+	{ code: 'delivery', label: 'Безкоштовна доставка', percent: 0, freeDelivery: true, weight: 5 },
+	{ code: 'off7', label: 'Знижка 7%', percent: 7, freeDelivery: false, weight: 5 },
+	{ code: 'retry', label: 'Ще спроба', percent: 0, freeDelivery: false, weight: 2 }
+] as const;
+
+export type WheelPrizeCode = (typeof WHEEL_PRIZES)[number]['code'];
+
+/** Скільки годин діє виграний приз. */
+export const WHEEL_PRIZE_HOURS = 24;
+
+/** Через скільки секунд на сайті зʼявляється колесо (або одразу на другій сторінці). */
+export const WHEEL_DELAY_MS = 25_000;
+
+/**
  * Сезонні колекції — добірки з кількох категорій на одній сторінці
  * (`/collection/<slug>`).
  *
@@ -215,8 +246,13 @@ export function isAddressPending(order: {
  * (близько 20 грн + 2 %). Колись тут стояли «90 грн», а на пошті покупець
  * платив півтори сотні — обіцянка, за яку потім претензії до магазину.
  */
-export function isDeliveryFree(value: DeliveryMethodValue, subtotal: number): boolean {
-	return deliveryMethod(value).kind === 'pickup' || subtotal >= FREE_DELIVERY_FROM;
+export function isDeliveryFree(
+	value: DeliveryMethodValue,
+	subtotal: number,
+	/** Безкоштовну доставку виграно в колесі фортуни. */
+	prizeFree = false
+): boolean {
+	return prizeFree || deliveryMethod(value).kind === 'pickup' || subtotal >= FREE_DELIVERY_FROM;
 }
 
 export const ORDER_STATUS_LABELS = {

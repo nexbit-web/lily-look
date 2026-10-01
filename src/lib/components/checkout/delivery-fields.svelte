@@ -9,6 +9,7 @@
 
 	let {
 		subtotal,
+		prizeFree = false,
 		errors,
 		/** Чи заданий ключ НП: без нього адреса вводиться вручну. */
 		novaPoshtaLive,
@@ -17,6 +18,8 @@
 		address = $bindable('')
 	}: {
 		subtotal: number;
+		/** Безкоштовну доставку виграно в колесі — безкоштовно будь-яким способом. */
+		prizeFree?: boolean;
 		errors: Record<string, string>;
 		novaPoshtaLive: boolean;
 		method?: DeliveryMethodValue;
@@ -96,7 +99,7 @@
 	<RadioGroup.Root bind:value={method as string} class="gap-3">
 		{#each DELIVERY_METHODS as item (item.value)}
 			{@const active = method === item.value}
-			{@const free = isDeliveryFree(item.value, subtotal)}
+			{@const free = isDeliveryFree(item.value, subtotal, prizeFree)}
 			<label
 				for="delivery-{item.value}"
 				class={cn(

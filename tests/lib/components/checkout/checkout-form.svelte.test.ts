@@ -21,6 +21,9 @@ vi.mock('$app/forms', () => ({
 		return { destroy() {} };
 	}
 }));
+/** Дані шару: тут лише приз колеса, який читає підсумок. */
+const { pageData } = vi.hoisted(() => ({ pageData: { prize: null as unknown } }));
+vi.mock('$app/state', () => ({ page: { data: pageData } }));
 const { toastError } = vi.hoisted(() => ({ toastError: vi.fn() }));
 vi.mock('svelte-hot-french-toast', () => ({ default: { success: vi.fn(), error: toastError } }));
 
@@ -101,6 +104,50 @@ describe('підсумок замовлення', () => {
 		const summary = container.querySelector('aside')!.textContent!;
 
 		expect(summary).not.toMatch(/від \d+\s*грн|\b90\s*грн/);
+	});
+});
+
+describe('приз колеса в підсумку', () => {
+	beforeEach(() => {
+		pageData.prize = null;
+	});
+
+	it('знижка віднімається від суми до сплати', () => {
+		pageData.prize = {
+			code: 'off7',
+			label: 'Знижка 7%',
+			percent: 7,
+			freeDelivery: false,
+			expiresAt: '2099-01-01'
+		};
+		open(287_000);
+
+		const row = document.querySelector('[data-slot="checkout-prize"]');
+		expect(row).toHaveTextContent('Знижка 7%');
+		expect(row).toHaveTextContent(/−201\sгрн/);
+		expect(screen.getByText('До сплати').nextElementSibling).toHaveTextContent(/2\s669\sгрн/);
+	});
+
+	it('виграна доставка — безкоштовна будь-яким способом, сума не змінюється', () => {
+		pageData.prize = {
+			code: 'delivery',
+			label: 'Безкоштовна доставка',
+			percent: 0,
+			freeDelivery: true,
+			expiresAt: '2099-01-01'
+		};
+		// Сума нижча за поріг безкоштовної доставки — безкоштовною її робить приз.
+		open(150_000);
+
+		expect(screen.getByText(/Безкоштовно — ваш приз/)).toBeInTheDocument();
+		expect(document.querySelector('[data-slot="checkout-prize"]')).toBeNull();
+		expect(screen.getByText('До сплати').nextElementSibling).toHaveTextContent(/1\s500\sгрн/);
+	});
+
+	it('без приза рядка немає', () => {
+		open(287_000);
+
+		expect(document.querySelector('[data-slot="checkout-prize"]')).toBeNull();
 	});
 });
 

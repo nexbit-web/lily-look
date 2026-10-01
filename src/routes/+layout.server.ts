@@ -3,20 +3,28 @@ import { cached } from '$lib/server/cache';
 import { readCart } from '$lib/server/cart';
 import { listCategories } from '$lib/server/catalog';
 import { isDatabaseConfigured } from '$lib/server/db';
+import { WHEEL_SEEN_COOKIE, readPrize } from '$lib/server/wheel';
 import type { LayoutServerLoad } from './$types';
 
 export const load: LayoutServerLoad = async ({ cookies }) => {
 	// На /setup бази ще немає — віддаємо порожній каркас, щоб шапка відрендерилась.
 	if (!isDatabaseConfigured()) {
-		return { categories: [], cartCount: 0 };
+		return { categories: [], cartCount: 0, prize: null, wheelEligible: false };
 	}
 
 	// Меню однакове для всіх — тримаємо його в пам'яті; кошик у кожного свій
-	// і читається щоразу.
-	const [categories, cart] = await Promise.all([
+	// і читається щоразу. Приз читається, лише коли є кука розіграшу.
+	const [categories, cart, prize] = await Promise.all([
 		cached('categories', CATALOG_CACHE_MS, listCategories),
-		readCart(cookies)
+		readCart(cookies),
+		readPrize(cookies)
 	]);
 
-	return { categories, cartCount: cart.count };
+	return {
+		categories,
+		cartCount: cart.count,
+		prize,
+		// Колесо — лише тим, хто його ще не бачив і не має чинного приза.
+		wheelEligible: !prize && !cookies.get(WHEEL_SEEN_COOKIE)
+	};
 };

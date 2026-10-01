@@ -80,7 +80,12 @@ export const actions: Actions = {
 			}
 		}
 
-		return { added: true };
+		// Підсумок кошика — для вікна «Додано в кошик»: скільки там уже
+		// лежить і скільки бракує до безкоштовної доставки.
+		return {
+			added: true,
+			cart: { count: result.cart.count, subtotal: result.cart.subtotal }
+		};
 	},
 
 	/**
@@ -105,9 +110,14 @@ export const actions: Actions = {
 			return fail(400, { quick: true, errors: fieldErrors(parsed.error), values });
 		}
 
-		const result = await createQuickOrder(variantId, parsed.data, event.url.origin);
+		const result = await createQuickOrder(event.cookies, variantId, parsed.data, event.url.origin);
 		if (!result.ok) {
-			return fail(400, { quick: true, message: result.message, values });
+			return fail(400, {
+				quick: true,
+				message: result.message,
+				values,
+				prizeTaken: !!result.prizeTaken
+			});
 		}
 
 		const visitor = identify(event);

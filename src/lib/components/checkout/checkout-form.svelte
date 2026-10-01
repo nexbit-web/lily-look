@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { invalidateAll } from '$app/navigation';
+	import { page } from '$app/state';
 	import DeliveryFields from '$lib/components/checkout/delivery-fields.svelte';
 	import Field from '$lib/components/checkout/field.svelte';
 	import PhoneField from '$lib/components/checkout/phone-field.svelte';
@@ -12,7 +14,10 @@
 	} from '$lib/config';
 	import { formatPrice } from '$lib/money';
 	import { plural } from '$lib/plural';
-	import type { CartView } from '$lib/types';
+	import type { ActivePrize, CartView } from '$lib/types';
+	import { cn } from '$lib/utils';
+	import { prizeDiscount } from '$lib/wheel';
+	import GiftIcon from '@lucide/svelte/icons/gift';
 	import BanknoteIcon from '@lucide/svelte/icons/banknote';
 	import LoaderIcon from '@lucide/svelte/icons/loader-circle';
 	import ShieldCheckIcon from '@lucide/svelte/icons/shield-check';
@@ -86,7 +91,16 @@
 	 * пошті, тож у суму до сплати магазину вона не входить. Суму тарифу не
 	 * називаємо — чому, див. `isDeliveryFree`.
 	 */
-	const freeDelivery = $derived(isDeliveryFree(deliveryMethod, cart.subtotal));
+
+	/**
+	 * Приз колеса з даних шару. Та сама функція рахує знижку й для
+	 * замовлення, тож «До сплати» тут дорівнює сумі, яку запише сервер.
+	 * Безкоштовна доставка рахується від суми до знижки: виграна знижка не
+	 * має забирати в покупця доставку.
+	 */
+	const prize = $derived((page.data.prize as ActivePrize | null | undefined) ?? null);
+	const discount = $derived(prizeDiscount(prize, cart.subtotal));
+	const freeDelivery = $derived(isDeliveryFree(deliveryMethod, cart.subtotal, prize?.freeDelivery));
 
 	function markTouched(field: string) {
 		touched[field] = true;
@@ -114,6 +128,9 @@
 				toast.error(String(result.data?.message ?? 'Перевірте виділені поля'));
 			}
 			await update({ reset: false });
+			// Подарунок на цей номер уже брали — прибираємо знижку з підсумку
+			// (і смужку з таймером): наступне натискання оформить без неї.
+			if (result.type === 'failure' && result.data?.prizeTaken) await invalidateAll();
 		};
 	}}
 >
@@ -185,6 +202,7 @@
 			bind:city
 			bind:address
 			subtotal={cart.subtotal}
+			prizeFree={prize?.freeDelivery}
 			{novaPoshtaLive}
 			{errors}
 		/>
@@ -254,16 +272,38 @@
 				</div>
 				<div class="flex items-center justify-between">
 					<span class="text-muted-foreground">Доставка</span>
-					<span class={freeDelivery ? 'font-medium text-success' : 'text-muted-foreground'}>
-						{freeDelivery ? 'Безкоштовно' : 'За тарифом перевізника'}
+					<span
+						class={cn(
+							'flex items-center gap-1',
+							freeDelivery ? 'font-medium text-success' : 'text-muted-foreground'
+						)}
+					>
+						{#if freeDelivery && prize?.freeDelivery}
+							<GiftIcon class="size-4 shrink-0" aria-hidden="true" />
+							Безкоштовно — ваш приз
+						{:else}
+							{freeDelivery ? 'Безкоштовно' : 'За тарифом перевізника'}
+						{/if}
 					</span>
 				</div>
+				{#if prize && discount > 0}
+					<div
+						data-slot="checkout-prize"
+						class="flex items-center justify-between gap-3 text-brand"
+					>
+						<span class="flex items-center gap-1.5">
+							<GiftIcon class="size-4" aria-hidden="true" />
+							{prize.label}
+						</span>
+						<span class="font-medium tabular-nums">−{formatPrice(discount)}</span>
+					</div>
+				{/if}
 			</div>
 
 			<div class="border-t pt-4">
 				<div class="flex justify-between">
 					<span>До сплати</span>
-					<span class="font-medium tabular-nums">{formatPrice(cart.subtotal)}</span>
+					<span class="font-medium tabular-nums">{formatPrice(cart.subtotal - discount)}</span>
 				</div>
 				{#if !freeDelivery}
 					<p class="mt-2 text-xs text-muted-foreground">

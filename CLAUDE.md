@@ -12,7 +12,7 @@
 
 **Компоненты `src/lib/components/ui/**` — вендоренные.** Ставятся через `npx shadcn-svelte@latest add <name>`, вручную не редактируются (перезапишутся), из линта исключены.
 
-**Цены со скидкой считает БД, а не код.** `Product.price` — базовая цена, `Product.finalPrice` (и `ProductVariant.finalPrice`) — то, что платит покупатель; их пишет триггер из правил в таблице `Discount`. Никогда не записывай `finalPrice` из приложения и не считай скидку в TS: витрина только читает `finalPrice` и сравнивает его с `price`. Ручной пересчёт — `SELECT lily_recompute_prices();`.
+**Цены со скидкой считает БД, а не код.** `Product.price` — базовая цена, `Product.finalPrice` (и `ProductVariant.finalPrice`) — то, что платит покупатель; их пишет триггер из правил в таблице `Discount`. Никогда не записывай `finalPrice` из приложения и не считай скидку в TS: витрина только читает `finalPrice` и сравнивает его с `price`. Ручной пересчёт — `SELECT lily_recompute_prices();`. Единственное исключение — приз колеса фортуны: скидка на заказ целиком, считается в `prizeDiscount` (`src/lib/wheel.ts`) и пишется в `Order.prizeDiscount`.
 
 **Видно только то, что можно купить.** Условие «товар живой» одно на весь каталог — `VISIBLE_PRODUCT` в `catalog.ts`: `isActive` + есть вариант с `isActive` и `stock > 0`. Новый запрос к товарам — бери эту константу, не пиши условие заново. Размеры без остатка не доезжают до UI вообще (`AVAILABLE_VARIANT` в `where` вариантов).
 
@@ -51,6 +51,7 @@ npm run db:studio      # GUI к базе
 | Корзина                       | `src/lib/server/cart.ts`                                         |
 | Оформление заказа             | `src/lib/server/orders.ts`                                       |
 | «Купити в 1 клік»             | `createQuickOrder` + `quick-order-dialog.svelte`, README         |
+| Колесо фортуны, призы         | `WHEEL_PRIZES` в `config.ts`, `src/lib/server/wheel.ts`, README  |
 | Подключение провайдера оплаты | `src/lib/server/payments.ts`                                     |
 | Телеграм-бот менеджеров       | `src/lib/server/bot/`                                            |
 | Правила статусов заказа       | `src/lib/bot/workflow.ts`                                        |

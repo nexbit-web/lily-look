@@ -3,9 +3,12 @@ import type { DeliveryMethodValue } from '$lib/config';
 import type { CheckoutInput, QuickOrderInput } from '$lib/schemas';
 import type { CartLine } from '$lib/types';
 import { clearCart, lineForVariant, readCart } from './cart.js';
+import type { Prisma } from '../../../prisma/generated/client.js';
 import { db } from './db.js';
+import { prizeDiscount } from '$lib/wheel';
 import { DEFAULT_PAYMENT_PROVIDER, getPaymentProvider } from './payments.js';
 import { dispatchOrder } from './bot/orders.js';
+import { PRIZE_COOKIE, claimPrize, forgetPrize } from './wheel.js';
 
 /** Символи без 0/O/1/I — щоб номер можна було продиктувати телефоном. */
 const NUMBER_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
@@ -22,6 +25,19 @@ class OutOfStockError extends Error {
 	}
 }
 
+/**
+ * На цей номер подарунок колеса вже брали. Куки можна почистити й
+ * покрутити знову — а номер телефону в замовленні справжній: на нього
+ * дзвонить менеджер і приходить посилка.
+ */
+class PrizeTakenError extends Error {
+	constructor() {
+		super(
+			'Подарунок із колеса діє один раз на номер телефону — його вже використано. Натисніть ще раз, і ми оформимо замовлення без знижки.'
+		);
+	}
+}
+
 export type CreateOrderResult =
 	| {
 			ok: true;
@@ -29,8 +45,15 @@ export type CreateOrderResult =
 			redirectUrl: string | null;
 			/** Що купили — для реклами (подія Purchase), без особистого. */
 			items: { slug: string; name: string; unitPrice: number; quantity: number }[];
+			/** Приз колеса, що пішов у замовлення: «Знижка 7%», «Безкоштовна доставка». */
+			prize: string | null;
 	  }
-	| { ok: false; message: string };
+	| {
+			ok: false;
+			message: string;
+			/** Приз відхилено (на номер уже брали) — куку приза треба прибрати. */
+			prizeTaken?: true;
+	  };
 
 /**
  * Оформлення замовлення з кошика.
@@ -49,8 +72,13 @@ export async function createOrder(
 		return { ok: false, message: 'Кошик порожній.' };
 	}
 
-	const result = await placeOrder(cart.lines, input, origin);
-	if (result.ok) await clearCart(cookies);
+	const result = await placeOrder(cart.lines, input, origin, cookies.get(PRIZE_COOKIE));
+	if (result.ok) {
+		await clearCart(cookies);
+		if (result.prize) forgetPrize(cookies);
+	}
+	// Без куки наступне натискання оформить замовлення без знижки.
+	if (!result.ok && result.prizeTaken) forgetPrize(cookies);
 	return result;
 }
 
@@ -63,6 +91,7 @@ export async function createOrder(
  * Кошик не чіпаємо: що лежало, те й лежить.
  */
 export async function createQuickOrder(
+	cookies: Cookies,
 	variantId: string,
 	contact: QuickOrderInput,
 	origin?: string
@@ -70,7 +99,7 @@ export async function createQuickOrder(
 	const line = await lineForVariant(variantId);
 	if (!line) return { ok: false, message: 'Цього розміру вже немає в наявності.' };
 
-	return placeOrder(
+	const result = await placeOrder(
 		[line],
 		{
 			...contact,
@@ -80,12 +109,24 @@ export async function createQuickOrder(
 			deliveryAddress: '',
 			comment: ''
 		},
-		origin
+		origin,
+		cookies.get(PRIZE_COOKIE)
 	);
+	if ((result.ok && result.prize) || (!result.ok && result.prizeTaken)) forgetPrize(cookies);
+	return result;
 }
 
 /** Спосіб доставки швидкого замовлення, поки менеджер не уточнив. */
 export const QUICK_ORDER_DELIVERY: DeliveryMethodValue = 'NOVA_POSHTA_BRANCH';
+
+/** Чи брав цей номер подарунок колеса раніше (скасовані замовлення не рахуються). */
+async function phoneHadPrize(tx: Prisma.TransactionClient, phone: string): Promise<boolean> {
+	const order = await tx.order.findFirst({
+		where: { customerPhone: phone, prize: { not: null }, status: { not: 'CANCELLED' } },
+		select: { id: true }
+	});
+	return order !== null;
+}
 
 /**
  * Замовлення з готових позицій.
@@ -97,7 +138,9 @@ export const QUICK_ORDER_DELIVERY: DeliveryMethodValue = 'NOVA_POSHTA_BRANCH';
 async function placeOrder(
 	lines: CartLine[],
 	input: CheckoutInput,
-	origin: string | undefined
+	origin: string | undefined,
+	/** Id розіграшу колеса з куки — приз забирається в тій самій транзакції. */
+	spinId?: string
 ): Promise<CreateOrderResult> {
 	const deliveryMethod = input.deliveryMethod as DeliveryMethodValue;
 	const subtotal = lines.reduce((sum, line) => sum + line.lineTotal, 0);
@@ -107,7 +150,7 @@ async function placeOrder(
 	// (`isDeliveryFree`), а картка замовлення так і пише.
 	const deliveryCost = 0;
 
-	let created: { id: string; number: string };
+	let created: { id: string; number: string; total: number; prize: string | null };
 
 	try {
 		created = await db.$transaction(async (tx) => {
@@ -123,9 +166,18 @@ async function placeOrder(
 				if (updated.count === 0) throw new OutOfStockError(line.productName);
 			}
 
+			const number = generateOrderNumber();
+			// Приз колеса — єдина знижка, яку рахує сайт, а не база: вона
+			// на замовлення цілком, а не на товар (див. `prizeDiscount`).
+			const prize = await claimPrize(tx, spinId, number);
+			// Один подарунок на номер телефону. Відмова відкочує всю
+			// транзакцію — і залишки, і позначку «приз використано».
+			if (prize && (await phoneHadPrize(tx, input.customerPhone))) throw new PrizeTakenError();
+			const discount = prizeDiscount(prize, subtotal);
+
 			return tx.order.create({
 				data: {
-					number: generateOrderNumber(),
+					number,
 					customerName: input.customerName,
 					customerPhone: input.customerPhone,
 					customerEmail: input.customerEmail || null,
@@ -135,7 +187,10 @@ async function placeOrder(
 					comment: input.comment || null,
 					subtotal,
 					deliveryCost,
-					total: subtotal + deliveryCost,
+					total: subtotal - discount + deliveryCost,
+					prize: prize?.label ?? null,
+					prizeDiscount: discount,
+					prizeFreeDelivery: prize?.freeDelivery ?? false,
 					paymentProvider: DEFAULT_PAYMENT_PROVIDER,
 					items: {
 						create: lines.map((line) => ({
@@ -151,11 +206,14 @@ async function placeOrder(
 						}))
 					}
 				},
-				select: { id: true, number: true }
+				select: { id: true, number: true, total: true, prize: true }
 			});
 		});
 	} catch (error) {
 		if (error instanceof OutOfStockError) return { ok: false, message: error.message };
+		if (error instanceof PrizeTakenError) {
+			return { ok: false, message: error.message, prizeTaken: true };
+		}
 		throw error;
 	}
 
@@ -163,7 +221,7 @@ async function placeOrder(
 	const intent = await provider.createPayment({
 		id: created.id,
 		number: created.number,
-		total: subtotal + deliveryCost,
+		total: created.total,
 		customerName: input.customerName,
 		customerEmail: input.customerEmail || null
 	});
@@ -188,6 +246,7 @@ async function placeOrder(
 		ok: true,
 		number: created.number,
 		redirectUrl: intent.redirectUrl,
+		prize: created.prize,
 		items: lines.map((line) => ({
 			slug: line.productSlug,
 			name: line.productName,
@@ -212,6 +271,9 @@ export async function getOrderByNumber(number: string) {
 			subtotal: true,
 			deliveryCost: true,
 			total: true,
+			prize: true,
+			prizeDiscount: true,
+			prizeFreeDelivery: true,
 			createdAt: true,
 			items: {
 				select: {

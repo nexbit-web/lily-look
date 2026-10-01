@@ -42,6 +42,12 @@ export type OrderMessage = {
 	subtotal: number;
 	deliveryCost: number;
 	total: number;
+	/** Приз колеса фортуни: «Знижка 7%», «Безкоштовна доставка». Немає — рядків не буде. */
+	prize?: string | null;
+	/** Знижка приза в копійках, уже віднята в `total`. */
+	prizeDiscount?: number;
+	/** Виграно безкоштовну доставку: у накладній платить магазин. */
+	prizeFreeDelivery?: boolean;
 	/** Як платять: «Оплата при отриманні» чи назва провайдера. */
 	payment: string;
 	/** Посилання на замовлення на сайті. Немає — рядка не буде. */
@@ -142,6 +148,10 @@ export function buildOrderMessage(order: OrderMessage): string {
 	const money = [
 		'',
 		`Товари · ${formatPrice(order.subtotal)}`,
+		...(order.prize && order.prizeDiscount
+			? [`🎁 ${escapeHtml(order.prize)} з колеса · −${formatPrice(order.prizeDiscount)}`]
+			: []),
+		...(order.prizeFreeDelivery ? ['🎁 Безкоштовна доставка з колеса'] : []),
 		`Доставка · ${deliveryNote(order)}`,
 		`<b>Разом · ${formatPrice(order.total)}</b>`,
 		'',
@@ -179,7 +189,9 @@ export function buildOrderMessage(order: OrderMessage): string {
  * накладну: безкоштовну доставку оплачує магазин (платник — відправник),
  * решту — покупець на пошті (платник — отримувач).
  */
-function deliveryNote(order: Pick<OrderMessage, 'method' | 'subtotal' | 'deliveryCost'>): string {
+function deliveryNote(
+	order: Pick<OrderMessage, 'method' | 'subtotal' | 'deliveryCost' | 'prizeFreeDelivery'>
+): string {
 	const label = deliveryPriceLabel(order).toLowerCase();
 	if (order.deliveryCost > 0 || deliveryMethod(order.method).kind === 'pickup') return label;
 	return label === 'безкоштовно' ? 'безкоштовно, платить магазин' : `${label}, платить отримувач`;

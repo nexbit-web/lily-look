@@ -16,7 +16,8 @@ const dispatchOrder = vi.fn();
 
 const tx = {
 	productVariant: { updateMany: vi.fn() },
-	order: { create: vi.fn() }
+	order: { create: vi.fn(), findFirst: vi.fn() },
+	wheelSpin: { findFirst: vi.fn(), updateMany: vi.fn() }
 };
 
 const db = {
@@ -30,7 +31,12 @@ vi.mock('$lib/server/bot/orders', () => ({ dispatchOrder }));
 
 const { createOrder, createQuickOrder } = await import('$lib/server/orders');
 
-const cookies = {} as Cookies;
+/** Кука розіграшу колеса — є лише в тестах приза. */
+let prizeCookie: string | undefined;
+const cookies = {
+	get: vi.fn((name: string) => (name === 'lily_prize' ? prizeCookie : undefined)),
+	delete: vi.fn()
+} as unknown as Cookies;
 
 const line: CartLine = {
 	id: 'item-1',
@@ -63,7 +69,18 @@ beforeEach(() => {
 	clearCart.mockResolvedValue(undefined);
 	dispatchOrder.mockResolvedValue(0);
 	tx.productVariant.updateMany.mockResolvedValue({ count: 1 });
-	tx.order.create.mockResolvedValue({ id: 'order-1', number: 'LL-ABC234' });
+	tx.order.create.mockImplementation(async ({ data }) => ({
+		id: 'order-1',
+		number: 'LL-ABC234',
+		total: data.total,
+		prize: data.prize
+	}));
+	tx.wheelSpin.findFirst.mockReset();
+	tx.order.findFirst.mockReset().mockResolvedValue(null);
+	vi.mocked(cookies.delete).mockClear();
+	tx.wheelSpin.updateMany.mockReset().mockResolvedValue({ count: 1 });
+	prizeCookie = undefined;
+	vi.mocked(cookies.delete).mockClear();
 	db.order.update.mockResolvedValue({});
 	db.$transaction.mockClear();
 });
@@ -204,7 +221,7 @@ describe('createQuickOrder — «Купити в 1 клік»', () => {
 	});
 
 	it('одна річ, ім’я й телефон — замовлення без адреси, яку уточнить менеджер', async () => {
-		const result = await createQuickOrder('var-1', contact);
+		const result = await createQuickOrder(cookies, 'var-1', contact);
 
 		expect(result).toMatchObject({ ok: true, number: 'LL-ABC234' });
 		const data = tx.order.create.mock.calls[0][0].data;
@@ -223,7 +240,7 @@ describe('createQuickOrder — «Купити в 1 клік»', () => {
 	});
 
 	it('залишок списується тим самим атомарним способом, що й з кошика', async () => {
-		await createQuickOrder('var-1', contact);
+		await createQuickOrder(cookies, 'var-1', contact);
 
 		expect(tx.productVariant.updateMany).toHaveBeenCalledWith(
 			expect.objectContaining({
@@ -234,7 +251,7 @@ describe('createQuickOrder — «Купити в 1 клік»', () => {
 	});
 
 	it('менеджери отримують замовлення, а кошик покупця лишається як був', async () => {
-		await createQuickOrder('var-1', contact, 'https://lilylook.store');
+		await createQuickOrder(cookies, 'var-1', contact, 'https://lilylook.store');
 
 		expect(dispatchOrder).toHaveBeenCalledWith('LL-ABC234', 'https://lilylook.store');
 		expect(clearCart).not.toHaveBeenCalled();
@@ -243,7 +260,7 @@ describe('createQuickOrder — «Купити в 1 клік»', () => {
 	it('розмір розібрали чи вимкнули — зрозуміла відмова, без замовлення', async () => {
 		lineForVariant.mockResolvedValue(null);
 
-		const result = await createQuickOrder('var-1', contact);
+		const result = await createQuickOrder(cookies, 'var-1', contact);
 
 		expect(result).toEqual({ ok: false, message: 'Цього розміру вже немає в наявності.' });
 		expect(tx.order.create).not.toHaveBeenCalled();
@@ -252,9 +269,170 @@ describe('createQuickOrder — «Купити в 1 клік»', () => {
 	it('останню річ щойно забрав інший покупець — відмова, замовлення не створене', async () => {
 		tx.productVariant.updateMany.mockResolvedValueOnce({ count: 0 });
 
-		const result = await createQuickOrder('var-1', contact);
+		const result = await createQuickOrder(cookies, 'var-1', contact);
 
 		expect(result).toMatchObject({ ok: false });
 		expect(tx.order.create).not.toHaveBeenCalled();
+	});
+});
+
+describe('приз колеса фортуни', () => {
+	const later = () => new Date(Date.now() + 60 * 60 * 1000);
+
+	it('без куки розіграшу — замовлення як завжди, приз у базі не шукаємо', async () => {
+		await createOrder(cookies, input);
+
+		expect(tx.wheelSpin.findFirst).not.toHaveBeenCalled();
+		expect(tx.order.create.mock.calls[0][0].data).toMatchObject({
+			subtotal: 319_800,
+			total: 319_800,
+			prize: null,
+			prizeDiscount: 0
+		});
+	});
+
+	it('знижка 7% віднімається від суми й округлюється до гривні', async () => {
+		prizeCookie = 'spin-1';
+		tx.wheelSpin.findFirst.mockResolvedValue({ prize: 'off7', expiresAt: later() });
+
+		const result = await createOrder(cookies, input);
+
+		// 7% від 3 198 грн — 223,86 → 224 грн
+		expect(tx.order.create.mock.calls[0][0].data).toMatchObject({
+			subtotal: 319_800,
+			prizeDiscount: 22_400,
+			total: 297_400,
+			prize: 'Знижка 7%'
+		});
+		expect(result).toMatchObject({ ok: true, prize: 'Знижка 7%' });
+	});
+
+	it('приз забирається один раз — умовою «ще не використаний» у тій самій транзакції', async () => {
+		prizeCookie = 'spin-1';
+		tx.wheelSpin.findFirst.mockResolvedValue({ prize: 'off3', expiresAt: later() });
+
+		await createOrder(cookies, input);
+
+		expect(tx.wheelSpin.updateMany).toHaveBeenCalledWith({
+			where: { id: 'spin-1', usedAt: null },
+			data: { usedAt: expect.any(Date), orderNumber: expect.stringMatching(/^LL-/) }
+		});
+		// Смужка з таймером має зникнути.
+		expect(cookies.delete).toHaveBeenCalledWith('lily_prize', { path: '/' });
+	});
+
+	it('безкоштовна доставка — позначкою в замовленні, сума не змінюється', async () => {
+		prizeCookie = 'spin-1';
+		tx.wheelSpin.findFirst.mockResolvedValue({ prize: 'delivery', expiresAt: later() });
+
+		await createOrder(cookies, input);
+
+		expect(tx.order.create.mock.calls[0][0].data).toMatchObject({
+			total: 319_800,
+			prize: 'Безкоштовна доставка',
+			prizeDiscount: 0,
+			prizeFreeDelivery: true
+		});
+	});
+
+	it('невідомий код приза в замовлення не потрапляє й розіграш не витрачає', async () => {
+		prizeCookie = 'spin-1';
+		tx.wheelSpin.findFirst.mockResolvedValue({ prize: 'off0', expiresAt: later() });
+
+		await createOrder(cookies, input);
+
+		expect(tx.order.create.mock.calls[0][0].data).toMatchObject({
+			total: 319_800,
+			prize: null,
+			prizeFreeDelivery: false
+		});
+		expect(tx.wheelSpin.updateMany).not.toHaveBeenCalled();
+	});
+
+	it('приз прострочений чи вже використаний — замовлення без приза, а не відмова', async () => {
+		prizeCookie = 'spin-1';
+		tx.wheelSpin.findFirst.mockResolvedValue(null);
+
+		const result = await createOrder(cookies, input);
+
+		expect(result).toMatchObject({ ok: true, prize: null });
+		expect(tx.order.create.mock.calls[0][0].data).toMatchObject({ total: 319_800, prize: null });
+		expect(cookies.delete).not.toHaveBeenCalled();
+	});
+
+	it('два замовлення одночасно — приз дістається лише одному', async () => {
+		prizeCookie = 'spin-1';
+		tx.wheelSpin.findFirst.mockResolvedValue({ prize: 'off7', expiresAt: later() });
+		tx.wheelSpin.updateMany.mockResolvedValue({ count: 0 });
+
+		await createOrder(cookies, input);
+
+		expect(tx.order.create.mock.calls[0][0].data).toMatchObject({ total: 319_800, prize: null });
+	});
+
+	it('«Купити в 1 клік» теж отримує приз', async () => {
+		lineForVariant.mockResolvedValue({ ...line, quantity: 1, lineTotal: 159_900 });
+		prizeCookie = 'spin-1';
+		tx.wheelSpin.findFirst.mockResolvedValue({ prize: 'off5', expiresAt: later() });
+
+		await createQuickOrder(cookies, 'var-1', {
+			customerName: 'Олена',
+			customerPhone: '+380671234567'
+		});
+
+		// 5% від 1 599 грн — 79,95 → 80 грн
+		expect(tx.order.create.mock.calls[0][0].data).toMatchObject({
+			prizeDiscount: 8_000,
+			total: 151_900,
+			prize: 'Знижка 5%'
+		});
+		expect(cookies.delete).toHaveBeenCalledWith('lily_prize', { path: '/' });
+	});
+
+	it('подарунок — один на номер: почистив куки й покрутив знову — знижки не буде', async () => {
+		prizeCookie = 'spin-2';
+		tx.wheelSpin.findFirst.mockResolvedValue({ prize: 'off10', expiresAt: later() });
+		tx.order.findFirst.mockResolvedValue({ id: 'old-order' });
+
+		const result = await createOrder(cookies, input);
+
+		expect(tx.order.findFirst).toHaveBeenCalledWith({
+			where: {
+				customerPhone: '+380671234567',
+				prize: { not: null },
+				status: { not: 'CANCELLED' }
+			},
+			select: { id: true }
+		});
+		// Замовлення не створене (транзакція відкотиться разом із позначкою
+		// «приз використано»), покупець бачить, чому.
+		expect(result).toMatchObject({ ok: false, prizeTaken: true });
+		expect(tx.order.create).not.toHaveBeenCalled();
+		expect(clearCart).not.toHaveBeenCalled();
+		// Кука приза прибрана — наступне натискання оформить без знижки.
+		expect(cookies.delete).toHaveBeenCalledWith('lily_prize', { path: '/' });
+	});
+
+	it('«Купити в 1 клік» — те саме правило одного подарунка на номер', async () => {
+		lineForVariant.mockResolvedValue({ ...line, quantity: 1, lineTotal: 159_900 });
+		prizeCookie = 'spin-2';
+		tx.wheelSpin.findFirst.mockResolvedValue({ prize: 'delivery', expiresAt: later() });
+		tx.order.findFirst.mockResolvedValue({ id: 'old-order' });
+
+		const result = await createQuickOrder(cookies, 'var-1', {
+			customerName: 'Олена',
+			customerPhone: '+380671234567'
+		});
+
+		expect(result).toMatchObject({ ok: false, prizeTaken: true });
+		expect(tx.order.create).not.toHaveBeenCalled();
+		expect(cookies.delete).toHaveBeenCalledWith('lily_prize', { path: '/' });
+	});
+
+	it('без приза номер не перевіряємо — звичайне замовлення не гальмує', async () => {
+		await createOrder(cookies, input);
+
+		expect(tx.order.findFirst).not.toHaveBeenCalled();
+		expect(tx.order.create).toHaveBeenCalled();
 	});
 });

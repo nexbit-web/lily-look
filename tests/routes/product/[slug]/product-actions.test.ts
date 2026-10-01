@@ -53,8 +53,20 @@ beforeEach(() => {
 
 describe('action add', () => {
 	it('без кількості додає одну річ — саме так надсилає сторінка', async () => {
-		await expect(add({ variantId: 'v-1' })).resolves.toEqual({ added: true });
+		await expect(add({ variantId: 'v-1' })).resolves.toEqual({
+			added: true,
+			cart: { count: 0, subtotal: 0 }
+		});
 		expect(addToCart).toHaveBeenCalledWith(expect.anything(), 'v-1', 1);
+	});
+
+	it('повертає підсумок кошика — для вікна «Додано в кошик»', async () => {
+		addToCart.mockResolvedValue({ ok: true, cart: { lines: [], subtotal: 574_000, count: 2 } });
+
+		await expect(add({ variantId: 'v-1' })).resolves.toMatchObject({
+			added: true,
+			cart: { count: 2, subtotal: 574_000 }
+		});
 	});
 
 	it('явна кількість доходить до кошика', async () => {
@@ -164,6 +176,8 @@ describe('action quick — «Купити в 1 клік»', () => {
 			location: '/order/LL-ABC234'
 		});
 		expect(createQuickOrder).toHaveBeenCalledWith(
+			// Куки — щоб замовлення забрало приз колеса, якщо він є.
+			expect.anything(),
 			'v-1',
 			{ customerName: 'Олена', customerPhone: '+380671234567' },
 			'http://localhost'

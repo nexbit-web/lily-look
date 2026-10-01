@@ -286,3 +286,27 @@ describe('замовлення в 1 клік', () => {
 		expect(plain(text({ method: 'PICKUP', city: '', address: '' }))).not.toContain('в 1 клік');
 	});
 });
+
+describe('приз колеса фортуни', () => {
+	it('безкоштовна доставка — менеджер бачить, що платить магазин', () => {
+		const message = plain(
+			text({ prize: 'Безкоштовна доставка', prizeDiscount: 0, prizeFreeDelivery: true })
+		);
+
+		expect(message).toContain('🎁 Безкоштовна доставка з колеса');
+		expect(message).toContain('безкоштовно, платить магазин');
+	});
+
+	it('знижка — рядком у сумі, разом уже з нею', () => {
+		const message = plain(
+			text({ prize: 'Знижка 7%', prizeDiscount: 22_400, subtotal: 319_800, total: 297_400 })
+		);
+
+		expect(message).toMatch(/🎁 Знижка 7% з колеса · −224\sгрн/);
+		expect(message).not.toContain('Безкоштовна доставка з колеса');
+	});
+
+	it('без приза — жодного згадування', () => {
+		expect(plain(text())).not.toContain('🎁');
+	});
+});

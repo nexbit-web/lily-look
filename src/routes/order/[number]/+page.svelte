@@ -5,6 +5,7 @@
 	import { formatPrice } from '$lib/money';
 	import { deliveryPriceLabel } from '$lib/store-facts';
 	import CheckIcon from '@lucide/svelte/icons/check';
+	import GiftIcon from '@lucide/svelte/icons/gift';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -18,7 +19,8 @@
 		deliveryPriceLabel({
 			method: order.deliveryMethod,
 			subtotal: order.subtotal,
-			deliveryCost: order.deliveryCost
+			deliveryCost: order.deliveryCost,
+			prizeFreeDelivery: order.prizeFreeDelivery
 		})
 	);
 </script>
@@ -107,6 +109,15 @@
 				<span class="text-muted-foreground">Доставка</span>
 				<span class="tabular-nums">{deliveryLabel}</span>
 			</div>
+			{#if order.prize && order.prizeDiscount > 0}
+				<div class="flex justify-between text-brand">
+					<span class="flex items-center gap-1.5">
+						<GiftIcon class="size-4 shrink-0" aria-hidden="true" />
+						{order.prize}
+					</span>
+					<span class="tabular-nums">−{formatPrice(order.prizeDiscount)}</span>
+				</div>
+			{/if}
 			<div class="flex justify-between border-t pt-2 text-base">
 				<span>Разом</span>
 				<span class="font-medium tabular-nums">{formatPrice(order.total)}</span>

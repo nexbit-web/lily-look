@@ -4,6 +4,7 @@ import type { CheckoutInput } from '$lib/schemas';
 import type { Cookies } from '@sveltejs/kit';
 import { createHash } from 'node:crypto';
 import type { Visitor } from './analytics.js';
+import { clientIp } from './client-ip.js';
 import { db } from './db.js';
 
 /**
@@ -95,25 +96,6 @@ type Person = {
 	userAgent: string | null;
 	fbc: string | null;
 };
-
-/**
- * IP покупця. Сайт стоїть за проксі хостингу, і сам сервер бачить лише
- * адресу проксі (127.0.0.1) — справжня приходить у `X-Forwarded-For`.
- * Для зіставлення з рекламою цього досить; локальна адреса — як жодної.
- */
-function clientIp(event: RequestLike): string | null {
-	const forwarded = event.request.headers.get('x-forwarded-for')?.split(',')[0]?.trim();
-	let ip = forwarded || null;
-	if (!ip) {
-		try {
-			ip = event.getClientAddress?.() ?? null;
-		} catch {
-			ip = null;
-		}
-	}
-	if (!ip || /^(127\.|::1$|::ffff:127\.)/.test(ip)) return null;
-	return ip;
-}
 
 function personOf(event: RequestLike, visitor: Visitor): Person {
 	const fbc = event.cookies.get(CLICK_COOKIE);

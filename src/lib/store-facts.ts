@@ -79,9 +79,13 @@ export function deliveryPriceLabel(order: {
 	method: DeliveryMethodValue;
 	subtotal: number;
 	deliveryCost: number;
+	/** Безкоштовну доставку виграно в колесі фортуни. */
+	prizeFreeDelivery?: boolean;
 }): string {
 	if (order.deliveryCost > 0) return formatPrice(order.deliveryCost);
-	return isDeliveryFree(order.method, order.subtotal) ? 'Безкоштовно' : 'За тарифом перевізника';
+	return isDeliveryFree(order.method, order.subtotal, order.prizeFreeDelivery)
+		? 'Безкоштовно'
+		: 'За тарифом перевізника';
 }
 
 /**

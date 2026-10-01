@@ -1,20 +1,25 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
+	import { page } from '$app/state';
+	import AddedToCartSheet from '$lib/components/product/added-to-cart-sheet.svelte';
 	import { BUY_BUTTON, SECONDARY_BUTTON } from '$lib/components/product/buy-button';
 	import CarrierMarks from '$lib/components/product/carrier-marks.svelte';
+	import PrizeOffer from '$lib/components/product/prize-offer.svelte';
 	import QuickOrderDialog from '$lib/components/product/quick-order-dialog.svelte';
 	import SizeChartDialog from '$lib/components/product/size-chart-dialog.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Spinner } from '$lib/components/ui/spinner';
 	import { FREE_DELIVERY_FROM, RETURN_DAYS, SIZE_ORDER } from '$lib/config';
-	import { discountPercent, formatPercent, formatPrice } from '$lib/money';
+	import { discountPercent, formatAmount, formatPercent, formatPrice } from '$lib/money';
 	import { plural } from '$lib/plural';
-	import type { DeliveryOption, ProductDetail } from '$lib/types';
+	import type { ActivePrize, DeliveryOption, ProductDetail } from '$lib/types';
 	import { cn } from '$lib/utils';
+	import { prizeDiscount } from '$lib/wheel';
 	import CheckIcon from '@lucide/svelte/icons/check';
 	import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
 	import RotateCcwIcon from '@lucide/svelte/icons/rotate-ccw';
+	import TagIcon from '@lucide/svelte/icons/tag';
 	import TruckIcon from '@lucide/svelte/icons/truck';
 	import WalletIcon from '@lucide/svelte/icons/wallet';
 	import { untrack } from 'svelte';
@@ -113,6 +118,19 @@
 	const selected = $derived(variantFor(selectedColor, selectedSize));
 	const price = $derived(selected?.price ?? product.price);
 	const discount = $derived(discountPercent(price, product.compareAt));
+	const onSale = $derived(product.compareAt !== null && product.compareAt > price);
+
+	/**
+	 * Приз із колеса. Ціна на сторінці — вже з ним: саме стільки покупець
+	 * заплатить, бо та сама знижка (`prizeDiscount`) ляже в замовлення.
+	 */
+	const prize = $derived((page.data.prize as ActivePrize | null | undefined) ?? null);
+	const prizeOff = $derived(prizeDiscount(prize, price));
+	const payPrice = $derived(price - prizeOff);
+	/** Закреслена ціна: до знижки магазину, а якщо її немає — до приза. */
+	const struckPrice = $derived(
+		onSale && product.compareAt ? product.compareAt : prizeOff > 0 ? price : null
+	);
 	const soldOut = $derived(product.variants.every((variant) => variant.stock < 1));
 
 	function chooseColor(color: string) {
@@ -146,8 +164,39 @@
 
 	const selectedMeasures = $derived(selected ? measuresOf(selected.size) : null);
 
+	/**
+	 * Підказка із замірами стоїть по центру над розміром, і в крайнього
+	 * розміру вилазила за край вікна — сторінка ставала ширшою, знизу
+	 * зʼявлялась смуга прокрутки. Щойно підказка показалась, зсуваємо її
+	 * всередину екрана (`--shift`), а стрілку — назад, щоб та й далі
+	 * вказувала на свій розмір. Міряємо до відмальовки кадру, тож стрибка
+	 * не видно.
+	 */
+	function placeTip(event: Event) {
+		const tip = (event.currentTarget as HTMLElement).querySelector<HTMLElement>('[role="tooltip"]');
+		if (!tip) return;
+		tip.style.setProperty('--shift', '0px');
+		const box = tip.getBoundingClientRect();
+		if (!box.width) return;
+
+		const EDGE = 12;
+		const right = document.documentElement.clientWidth - EDGE;
+		let shift = 0;
+		if (box.right > right) shift = right - box.right;
+		if (box.left + shift < EDGE) shift = EDGE - box.left;
+		tip.style.setProperty('--shift', `${shift}px`);
+	}
+
 	/** Вікно «Купити в 1 клік». */
 	let quickOpen = $state(false);
+
+	/**
+	 * Вікно «Додано в кошик». Розмір запамʼятовуємо в момент надсилання:
+	 * поки летить запит, покупець може вже тицьнути інший.
+	 */
+	let addedOpen = $state(false);
+	let added = $state<{ size: string; color: string } | undefined>();
+	let addedCart = $state<{ count: number; subtotal: number } | null>(null);
 	/** Натиснули «купити», не обравши розмір, — підсвічуємо, чого бракує. */
 	let askedForSize = $state(false);
 
@@ -247,7 +296,7 @@
 	}
 </script>
 
-<div class="space-y-8">
+<div class="space-y-6">
 	<div>
 		<a
 			href="/catalog/{product.category.slug}"
@@ -256,44 +305,69 @@
 			{product.category.name}
 		</a>
 
-		<h1 class="mt-3 text-3xl font-medium tracking-tight md:text-4xl">{product.name}</h1>
+		<!-- Назва — шрифтом логотипа: так сторінка товару звучить як бренд,
+		     а не як картка маркетплейсу. text-balance не лишає одне слово
+		     самотнім на другому рядку. -->
+		<h1
+			class="mt-3 font-heading text-[1.75rem] leading-[1.15] font-normal tracking-tight text-balance md:text-[2.5rem]"
+		>
+			{product.name}
+		</h1>
 
-		<div class="mt-4 flex flex-wrap items-baseline gap-3">
-			<span class="text-3xl tabular-nums">{formatPrice(price)}</span>
-			{#if product.compareAt && product.compareAt > price}
-				<span class="text-muted-foreground tabular-nums line-through">
-					{formatPrice(product.compareAt)}
+		<!-- Ціна. Сума — велика й жирна, «грн» дрібніше: око хапає число.
+		     Зі знижкою нова ціна червона, стара — закреслена поруч, а відсоток
+		     і вигода в гривнях зібрані в одну плашку під ними. Є приз із
+		     колеса — замість плашки розклад: звідки ця ціна й скільки
+		     економите. -->
+		<div data-slot="price" class="mt-5">
+			<p class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+				<span
+					class={cn(
+						'text-[2rem] leading-none font-semibold tracking-tight tabular-nums',
+						(onSale || prizeOff > 0) && 'text-sale'
+					)}
+				>
+					{formatAmount(payPrice)}<span class="ml-1 text-lg font-medium">грн</span>
 				</span>
-				{#if discount}
-					<span
-						class="rounded-full px-2 py-0.5 text-xs font-semibold text-sale ring-1 ring-sale/30 ring-inset"
-					>
-						−{formatPercent(discount)}%
+				{#if struckPrice}
+					<span class="text-lg text-muted-foreground tabular-nums line-through">
+						{formatPrice(struckPrice)}
 					</span>
 				{/if}
+			</p>
+
+			{#if prize}
+				<PrizeOffer {prize} {price} compareAt={product.compareAt} />
+			{:else if onSale && product.compareAt}
+				<p
+					data-slot="sale-badge"
+					class="mt-3 inline-flex items-center gap-1.5 rounded-full bg-sale/10 px-3 py-1 text-xs font-medium text-sale"
+				>
+					<TagIcon class="size-3.5" aria-hidden="true" />
+					{#if discount}
+						<span class="font-semibold">−{formatPercent(discount)}%</span>
+						<span aria-hidden="true">·</span>
+					{/if}
+					Економія {formatPrice(product.compareAt - price)}
+				</p>
 			{/if}
 		</div>
-
-		<!-- Вигода словами: відсоток покупець ще має перекласти в гривні,
-		     а різницю бачить одразу. -->
-		{#if product.compareAt && product.compareAt > price}
-			<p class="mt-2 text-sm text-sale">
-				Ви заощаджуєте {formatPrice(product.compareAt - price)}
-			</p>
-		{/if}
 	</div>
 
 	<form
 		method="POST"
 		action="?/add"
-		class="space-y-7"
+		class="space-y-5 border-t pt-6"
 		use:enhance={() => {
 			submitting = true;
+			const sent = selected;
 			return async ({ result }) => {
 				submitting = false;
 
 				if (result.type === 'success') {
-					toast.success('Додано в кошик');
+					added = sent;
+					addedCart = (result.data?.cart as typeof addedCart) ?? null;
+					addedOpen = true;
 					// Оновлюємо лічильник у шапці, не перезавантажуючи сторінку.
 					await invalidateAll();
 					return;
@@ -337,7 +411,9 @@
 			</fieldset>
 		{/if}
 
-		<fieldset class="space-y-3">
+		<!-- Від розмірів до кнопки — впритул: «Залишилось 1 шт.» стоїть посередині,
+		     і кнопка читається як продовження вибору, а не окремий блок. -->
+		<fieldset class="mb-3! space-y-3">
 			<div class="flex items-center justify-between gap-4">
 				<legend class="text-xs tracking-[0.15em] uppercase">Розмір</legend>
 				{#if product.measurements.length}
@@ -360,7 +436,12 @@
 							{@const variant = variantFor(selectedColor, size)}
 							{@const available = (variant?.stock ?? 0) > 0}
 							{@const measures = measuresOf(size)}
-							<div class="group/size relative">
+							<div
+								class="group/size relative"
+								role="presentation"
+								onmouseenter={placeTip}
+								onfocusin={placeTip}
+							>
 								<button
 									type="button"
 									disabled={!available}
@@ -389,11 +470,11 @@
 									<span
 										id="size-tip-{index}"
 										role="tooltip"
-										class="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2.5 hidden -translate-x-1/2 rounded-md bg-foreground/90 px-3 py-2 text-sm font-medium whitespace-nowrap text-background shadow-lg transition-[opacity,display] transition-discrete duration-150 group-hover/size:block group-has-focus-visible/size:block starting:opacity-0"
+										class="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2.5 hidden [translate:calc(-50%_+_var(--shift,0px))] rounded-md bg-foreground/90 px-3 py-2 text-sm font-medium whitespace-nowrap text-background shadow-lg transition-[opacity,display] transition-discrete duration-150 group-hover/size:block group-has-focus-visible/size:block starting:opacity-0"
 									>
 										{measures}
 										<span
-											class="absolute top-full left-1/2 -translate-x-1/2 border-[6px] border-transparent border-t-foreground/90"
+											class="absolute top-full left-1/2 [translate:calc(-50%_-_var(--shift,0px))] border-[6px] border-transparent border-t-foreground/90"
 											aria-hidden="true"
 										></span>
 									</span>
@@ -406,7 +487,7 @@
 
 			<!-- Рядок під розмірами тримає висоту завжди: інакше кнопка
 			     підстрибувала б щоразу, коли зʼявляється попередження. -->
-			<p class="min-h-5 text-xs text-brand" aria-live="polite">
+			<p class="min-h-4 text-xs leading-4 text-brand" aria-live="polite">
 				{#if selected && selected.stock <= LOW_STOCK}
 					Залишилось {selected.stock} шт. — устигніть
 				{:else if askedForSize && !selected}
@@ -502,7 +583,16 @@
 				>
 					<div class="min-w-0 flex-1">
 						<p class="truncate text-xs text-muted-foreground">{product.name}</p>
-						<p class="tabular-nums">{formatPrice(price)}</p>
+						<p class="tabular-nums">
+							<span class={cn(prizeOff > 0 && 'font-medium text-sale')}>
+								{formatPrice(payPrice)}
+							</span>
+							{#if prizeOff > 0}
+								<span class="ml-1 text-xs text-muted-foreground line-through">
+									{formatPrice(price)}
+								</span>
+							{/if}
+						</p>
 					</div>
 
 					{#if selected}
@@ -522,6 +612,15 @@
 			</div>
 		{/if}
 	</form>
+
+	<AddedToCartSheet
+		bind:open={addedOpen}
+		name={product.name}
+		variant={added}
+		{price}
+		image={photo}
+		cart={addedCart}
+	/>
 
 	<!-- Окрема форма, не всередині форми кошика: у неї свій action і свої поля. -->
 	<QuickOrderDialog

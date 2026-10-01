@@ -189,6 +189,27 @@ describe('форма купівлі', () => {
 		expect(screen.getByText('−19,73%')).toBeInTheDocument();
 	});
 
+	it('зі знижкою: нова ціна червона, стара закреслена, вигода в гривнях', () => {
+		render(AddToCartForm, { product: { ...product, compareAt: 330_000 } });
+
+		const price = document.querySelector('[data-slot="price"]');
+		expect(price?.querySelector('.text-sale')).toHaveTextContent(/2\s649\s?грн/);
+		expect(price?.querySelector('.line-through')).toHaveTextContent(/3\s300\s?грн/);
+		// 3 300 − 2 649 = 651 грн
+		expect(document.querySelector('[data-slot="sale-badge"]')).toHaveTextContent(
+			/Економія 651\s?грн/
+		);
+	});
+
+	it('без знижки — лише ціна, без червоного й без плашки', () => {
+		render(AddToCartForm, { product });
+
+		const price = document.querySelector('[data-slot="price"]');
+		expect(price).toHaveTextContent(/2\s649\s?грн/);
+		expect(price?.querySelector('.text-sale')).toBeNull();
+		expect(document.querySelector('[data-slot="sale-badge"]')).toBeNull();
+	});
+
 	it('назва з розмітки лишається текстом, а не стає HTML', () => {
 		const attack = '<img src=x onerror="alert(1)">';
 		render(AddToCartForm, { product: { ...product, name: attack } });

@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { applyAction, enhance } from '$app/forms';
+	import { invalidateAll } from '$app/navigation';
+	import { page } from '$app/state';
 	import Field from '$lib/components/checkout/field.svelte';
 	import PhoneField from '$lib/components/checkout/phone-field.svelte';
 	import { BUY_BUTTON } from '$lib/components/product/buy-button';
@@ -8,7 +10,10 @@
 	import { Spinner } from '$lib/components/ui/spinner';
 	import { IMAGE_SMALL, imageSrc } from '$lib/image';
 	import { formatPrice } from '$lib/money';
+	import type { ActivePrize } from '$lib/types';
 	import { cn } from '$lib/utils';
+	import { prizeDiscount } from '$lib/wheel';
+	import GiftIcon from '@lucide/svelte/icons/gift';
 	import PhoneCallIcon from '@lucide/svelte/icons/phone-call';
 	import toast from 'svelte-hot-french-toast';
 
@@ -33,6 +38,10 @@
 		price: number;
 		image: string | null;
 	} = $props();
+
+	/** Приз колеса піде й у швидке замовлення — показуємо, на що він перетвориться. */
+	const prize = $derived((page.data.prize as ActivePrize | null | undefined) ?? null);
+	const discount = $derived(prizeDiscount(prize, price));
 
 	let customerName = $state('');
 	let phoneDigits = $state('');
@@ -72,7 +81,22 @@
 				<div class="min-w-0 text-sm">
 					<p class="truncate font-medium">{name}</p>
 					<p class="text-muted-foreground">{variant.color} · {variant.size}</p>
-					<p class="mt-1 tabular-nums">{formatPrice(price)}</p>
+					{#if discount > 0}
+						<p class="mt-1 tabular-nums">
+							<span class="font-medium">{formatPrice(price - discount)}</span>
+							<span class="ml-1 text-xs text-muted-foreground line-through">
+								{formatPrice(price)}
+							</span>
+						</p>
+					{:else}
+						<p class="mt-1 tabular-nums">{formatPrice(price)}</p>
+					{/if}
+					{#if prize}
+						<p data-slot="quick-prize" class="mt-1 flex items-center gap-1 text-xs text-brand">
+							<GiftIcon class="size-3.5 shrink-0" aria-hidden="true" />
+							{prize.freeDelivery ? 'Доставка безкоштовна — ваш приз' : `${prize.label} врахована`}
+						</p>
+					{/if}
 				</div>
 			</div>
 		{/if}
@@ -100,6 +124,8 @@
 					if (result.type === 'failure') {
 						errors = (result.data?.errors as Record<string, string>) ?? {};
 						message = String(result.data?.message ?? '');
+						// Подарунок на цей номер уже брали — знижка зникає з вікна.
+						if (result.data?.prizeTaken) await invalidateAll();
 						return;
 					}
 					toast.error('Щось пішло не так. Спробуйте ще раз або зателефонуйте нам.');
